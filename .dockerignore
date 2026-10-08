@@ -1,0 +1,8 @@
+# The image only needs environment.yml; keep the build context small.
+.git
+logs
+outputs
+**/__pycache__
+.pytest_cache
+*.parquet
+tutorials/*.png

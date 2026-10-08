@@ -1,0 +1,27 @@
+# An empty, daylit arena. Nothing to find, nothing to hit except the walls.
+#
+# Good for a first drive and for testing a new driver:
+#   python run.py --scenario scenarios/empty_arena.yaml --driver random
+#   python run.py --scenario scenarios/empty_arena.yaml --driver keyboard --dashboard
+#
+# Any setting not listed here keeps its default from flycar/env/scenario.py.
+# Positions and angles accept a number (fixed) or [min, max] (random each reset).
+
+name: empty_arena
+description: Empty daylit arena with walls. No target.
+
+episode:
+  max_time_s: 20.0
+
+arena:
+  size_m: [40.0, 40.0]   # 40 m x 40 m, centred on the origin
+  walls: true
+
+spawn:
+  x: [-5.0, 5.0]
+  y: [-5.0, 5.0]
+  yaw_deg: [-180.0, 180.0]
+
+lighting:
+  ambient: 0.6           # daylight
+  sky: 0.8

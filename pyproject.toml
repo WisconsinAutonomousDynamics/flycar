@@ -1,0 +1,25 @@
+[project]
+name = "flycar"
+version = "0.1.0"
+description = "A fly-ready vehicle environment built on PyChrono."
+readme = "README.md"
+requires-python = ">=3.10"
+# The dependencies are installed with conda, from environment.yml.
+# (PyChrono is not on PyPI, so pip could not install them anyway.)
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Makes "import flycar" work when pytest is run from the repository root.
+pythonpath = ["."]
+markers = [
+    "slow: tests that take more than a few seconds (deselect with -m 'not slow')",
+]
+
+# Only matters if someone runs "pip install -e ." (optional, never required):
+# it tells setuptools that "flycar" is the one package in this repository.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["flycar*"]

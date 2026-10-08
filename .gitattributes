@@ -1,0 +1,4 @@
+# Keep line endings identical on Windows, macOS, Linux and in the devcontainer.
+* text=auto eol=lf
+*.png binary
+*.parquet binary

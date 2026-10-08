@@ -1,0 +1,27 @@
+# Fly Car development environment.
+#
+# Create it:    conda env create -f environment.yml
+# Activate it:  conda activate flycar
+# Update it:    conda env update -f environment.yml --prune
+#
+# (mamba / micromamba work the same way and are much faster at solving.)
+#
+# PyChrono and Python are pinned on purpose: PyChrono API names change between
+# releases, and everybody on the team should be reading the same API.
+# PyChrono 10.0.0 is built for Python 3.12 and 3.13 on Windows, Linux and
+# Apple-silicon macOS. There is no Intel-Mac build: use the devcontainer there.
+name: flycar
+channels:
+  - projectchrono
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - pychrono=10.0.0
+  - numpy
+  - pyyaml
+  - gymnasium
+  - matplotlib
+  - pandas
+  - pyarrow
+  - pytest

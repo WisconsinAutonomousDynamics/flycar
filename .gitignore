@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Run outputs (logs, plots, recordings)
+logs/
+outputs/
+*.parquet
+tutorials/*.png
+
+# Chrono / sensor-module scratch output
+SENSOR_OUTPUT/
+DEMO_OUTPUT/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

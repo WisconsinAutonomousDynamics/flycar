@@ -1,0 +1,41 @@
+// Fly Car devcontainer.
+//
+// Open this folder in VS Code and choose "Dev Containers: Reopen in Container".
+// Works on Windows (Docker Desktop + WSL2), Linux and Intel Macs.
+{
+  "name": "flycar",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    // Build from the repo root so the Dockerfile can copy environment.yml.
+    "context": ".."
+  },
+
+  // Optional NVIDIA GPU passthrough.
+  // "optional" means: add `--gpus all` when the host has a usable NVIDIA GPU,
+  // and start normally (CPU only) when it does not. With a GPU the `sensor`
+  // eye backend can work; without one the env falls back to `raycast`.
+  "hostRequirements": {
+    "gpu": "optional"
+  },
+
+  "remoteUser": "vscode",
+
+  // Prints which Chrono modules work every time the container is created.
+  "postCreateCommand": "python scripts/check_env.py",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/envs/flycar/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["tests"]
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml"
+      ]
+    }
+  }
+}
