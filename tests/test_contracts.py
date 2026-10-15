@@ -1,13 +1,24 @@
-"""spaces.py is the single source of truth, and docs/API.md must agree with it."""
+"""The frozen contracts (docs/CONTRACTS.md). Owned by the project leads.
+
+Changing anything tested here needs a lead-approved ``api-change`` issue.
+"""
 
 import re
 import subprocess
 import sys
 
 import numpy as np
+import pytest
 
 from conftest import REPO_ROOT, small_scenario
 from flycar.env import spaces
+from flycar.env.scenario import ScenarioError, load_scenario, sample
+
+
+# ----------------------------------------------------------------------------
+# spaces.py and docs/API.md
+# ----------------------------------------------------------------------------
+
 
 API_DOC = REPO_ROOT / "docs" / "API.md"
 
@@ -85,3 +96,56 @@ def test_driver_example_actually_runs(make_env):
         assert env.action_space.contains(np.asarray(action, dtype=np.float32))
         observation, _, _, _, info = env.step(action)
     assert info["pose"][0] > 0.1   # it drove forwards
+
+
+# ----------------------------------------------------------------------------
+# The scenario loader and the config registry
+# ----------------------------------------------------------------------------
+
+
+def test_defaults_are_filled_in():
+    scenario = load_scenario({"name": "tiny"})
+    assert scenario["eyes"]["resolution"] == [20, 20]
+    assert scenario["arena"]["walls"] is True
+    assert scenario["lights"] == []
+
+
+def test_misspelled_setting_is_rejected():
+    with pytest.raises(ScenarioError, match="max_tim_s"):
+        load_scenario({"episode": {"max_tim_s": 10}})
+
+
+def test_sample_number_and_range():
+    rng = np.random.default_rng(0)
+    assert sample(3.5, rng) == 3.5
+    for _ in range(100):
+        assert 2.0 <= sample([2.0, 4.0], rng) <= 4.0
+
+
+def test_scenario_error_is_still_importable_from_scenario_py():
+    import flycar.config
+    import flycar.env.scenario
+    assert flycar.env.scenario.ScenarioError is flycar.config.ScenarioError
+
+
+def test_two_teams_cannot_declare_the_same_section():
+    import types
+
+    from flycar import config
+
+    def validate(scenario, where):
+        pass
+
+    clash = types.SimpleNamespace(__name__="flycar.config.clash", SECTIONS={"eyes": {}}, validate=validate)
+    with pytest.raises(ImportError, match="eyes"):
+        config._collect(config.TEAM_MODULES + [clash])
+
+
+def test_every_section_comes_from_exactly_one_team_module():
+    from flycar import config
+
+    seen = list(config.TOP_LEVEL_DEFAULTS)
+    for module in config.TEAM_MODULES:
+        seen.extend(module.SECTIONS)
+    assert sorted(seen) == sorted(config.DEFAULTS)
+    assert len(seen) == len(set(seen))
