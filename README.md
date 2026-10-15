@@ -129,7 +129,8 @@ lights, where the car spawns, how long an episode lasts. **A new experiment is
 a new YAML file, not a code change.** Wherever a scenario wants a position or
 an angle you can write a number, or `[min, max]` to have it drawn at random on
 every reset. Copy `scenarios/light_seek.yaml` and edit it; every available
-setting and its default is listed at the top of `flycar/env/scenario.py`.
+setting and its default is listed in `flycar/config/`, one file per team
+(`core.py`, `vehicle.py`, `world.py`, `vision.py`).
 
 ### Eyes: two backends
 
@@ -201,7 +202,7 @@ flycar/
   env/
     core.py                FlyCarEnv: reset() and step(), owns the Chrono system and the time loop
     spaces.py              what an action and an observation ARE (single source of truth)
-    scenario.py            loads a scenario file, lists every setting and its default
+    scenario.py            loads a scenario file and fills in the defaults
     world.py               terrain, walls, obstacles, lights
     vehicle.py             the car; turns an action into Chrono driver inputs
     sensing/

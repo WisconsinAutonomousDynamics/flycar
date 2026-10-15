@@ -65,3 +65,32 @@ def test_layout_is_reproducible_and_respects_constraints():
     assert np.hypot(spawn_x - target_x, spawn_y - target_y) >= scenario["spawn"]["min_target_distance_m"]
     assert len(first["obstacles"]) == 4
     assert len(first["walls"]) == 4
+
+
+def test_scenario_error_is_still_importable_from_scenario_py():
+    import flycar.config
+    import flycar.env.scenario
+    assert flycar.env.scenario.ScenarioError is flycar.config.ScenarioError
+
+
+def test_two_teams_cannot_declare_the_same_section():
+    import types
+
+    from flycar import config
+
+    def validate(scenario, where):
+        pass
+
+    clash = types.SimpleNamespace(__name__="flycar.config.clash", SECTIONS={"eyes": {}}, validate=validate)
+    with pytest.raises(ImportError, match="eyes"):
+        config._collect(config.TEAM_MODULES + [clash])
+
+
+def test_every_section_comes_from_exactly_one_team_module():
+    from flycar import config
+
+    seen = list(config.TOP_LEVEL_DEFAULTS)
+    for module in config.TEAM_MODULES:
+        seen.extend(module.SECTIONS)
+    assert sorted(seen) == sorted(config.DEFAULTS)
+    assert len(seen) == len(set(seen))
