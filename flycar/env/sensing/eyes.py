@@ -21,6 +21,7 @@ the scenario (``eyes.fov_h_deg`` and ``eyes.fov_v_deg``).
 """
 
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +46,12 @@ SHADOW_OFFSET_M = 0.02
 # ----------------------------------------------------------------------------
 
 _sensor_probe_result = None   # cached, because the probe takes about a second
+
+# If this environment variable is set (auto, sensor or raycast), it overrides
+# the backend asked for by the scenario or by run.py --eyes. CI sets it to
+# "raycast" so every run is reproducible on any machine.
+BACKEND_ENV_VAR = "FLYCAR_EYE_BACKEND"
+BACKENDS = ("auto", "sensor", "raycast")
 
 
 def sensor_backend_works():
@@ -87,9 +94,19 @@ def choose_backend(requested):
     requested = "raycast" -> always raycast.
     requested = "sensor"  -> sensor, or an error if it does not work here.
     requested = "auto"    -> sensor if it works, otherwise raycast.
+
+    The environment variable FLYCAR_EYE_BACKEND, when set, replaces ``requested``.
     """
+    source = "requested by the scenario"
+    forced = os.environ.get(BACKEND_ENV_VAR, "").strip().lower()
+    if forced:
+        if forced not in BACKENDS:
+            raise ValueError(f"{BACKEND_ENV_VAR} must be one of {', '.join(BACKENDS)}, got {forced!r}.")
+        requested = forced
+        source = f"set by {BACKEND_ENV_VAR}"
+
     if requested == "raycast":
-        return "raycast", "requested by the scenario"
+        return "raycast", source
 
     works, reason = sensor_backend_works()
     if works:

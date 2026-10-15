@@ -99,3 +99,18 @@ def test_eye_noise_and_blur_are_not_implemented_yet(settings, key):
 def test_eye_update_period_must_be_a_multiple_of_the_control_period():
     with pytest.raises(ScenarioError, match="update_period_s"):
         load_scenario({"eyes": {"update_period_s": 0.015}})
+
+
+def test_flycar_eye_backend_variable_overrides_the_requested_backend(monkeypatch):
+    from flycar.env.sensing import eyes
+
+    monkeypatch.setenv("FLYCAR_EYE_BACKEND", "raycast")
+    # "sensor" would raise on a machine without a GPU; the variable wins.
+    assert eyes.choose_backend("sensor") == ("raycast", "set by FLYCAR_EYE_BACKEND")
+
+    monkeypatch.setenv("FLYCAR_EYE_BACKEND", "lidar")
+    with pytest.raises(ValueError, match="FLYCAR_EYE_BACKEND"):
+        eyes.choose_backend("auto")
+
+    monkeypatch.delenv("FLYCAR_EYE_BACKEND")
+    assert eyes.choose_backend("raycast") == ("raycast", "requested by the scenario")
