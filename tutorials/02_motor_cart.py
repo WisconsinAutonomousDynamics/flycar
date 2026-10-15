@@ -42,7 +42,7 @@ import pychrono as chrono
 TIME_STEP = 0.002      # s
 
 CHASSIS_SIZE = (0.6, 0.3, 0.1)   # length (x), width (y), height (z) [m]
-WHEEL_RADIUS = 0.1               # m
+WHEEL_RADIUS = 0.1 * 2               # m
 WHEEL_WIDTH = 0.04               # m
 TRACK = 0.4                      # m, distance between the two wheels
 CASTER_RADIUS = 0.05             # m
@@ -50,9 +50,11 @@ CASTER_RADIUS = 0.05             # m
 # The plan: (duration [s], left wheel speed [rad/s], right wheel speed [rad/s]).
 PHASES = [
     (3.0, 5.0, 5.0),    # both wheels the same speed   -> straight ahead
-    (4.0, 3.0, 6.0),    # right wheel faster           -> curve to the left
+    (1.0, -3.2, 3.1),    # right wheel faster           -> curve to the left
     (3.0, 5.0, 5.0),    # straight again
-    (1.0, -3.0, 3.0),   # opposite speeds              -> spin on the spot (about 90 degrees)
+    (1.0, -3.2, 3.1),   # opposite speeds              -> spin on the spot (about 90 degrees)
+    (3.0, 5.0, 5.0),    # straight
+    (1.0, -3.2, 3.1),   # opposite speeds              -> spin on the spot (about 90 degrees)
     (3.0, 5.0, 5.0),    # straight
 ]
 
@@ -60,7 +62,7 @@ PHASES = [
 def build_cart(system):
     """Create the cart. Returns (chassis, left_motor, right_motor)."""
     material = chrono.ChContactMaterialNSC()
-    material.SetFriction(0.9)
+    material.SetFriction(0.1)
 
     # The caster must slide sideways freely, so it gets a slippery material.
     slippery = chrono.ChContactMaterialNSC()
@@ -82,6 +84,7 @@ def build_cart(system):
         # A cylinder whose axis points along y, like an axle.
         wheel = chrono.ChBodyEasyCylinder(chrono.ChAxis_Y, WHEEL_RADIUS, WHEEL_WIDTH, 800, True, True, material)
         wheel.SetPos(wheel_position)
+
         system.Add(wheel)
 
         # A rotation motor is a hinge that turns at a commanded speed.

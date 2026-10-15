@@ -37,8 +37,8 @@ import pychrono as chrono
 import pychrono.vehicle as veh
 
 TIME_STEP = 0.001      # s
-TARGET_SPEED = 3.0     # m/s
-STEERING = 0.7         # fraction of full lock used in the turns
+TARGET_SPEED = 7.0     # m/s
+STEERING = 1.0         # fraction of full lock used in the turns
 WARMUP_TIME = 2.0      # s of driving straight before the first circle
 MAX_TIME = 60.0        # s, safety stop
 
@@ -60,21 +60,15 @@ def scripted_driver(time, speed, turned):
 
     if time < WARMUP_TIME:
         steering = 0.0                    # 1) straight
-    elif turned < 2.0 * math.pi and not scripted_driver.left_circle_done:
-        steering = +STEERING              # 2) one full circle to the left
     else:
-        scripted_driver.left_circle_done = True
-        if turned > 0.0:
-            steering = -STEERING          # 3) one full circle to the right
-        else:
-            steering = 0.0                # 4) done: stop
-            throttle = 0.0
-            braking = 1.0
-            finished = True
+        FREQ = 0.5
+        AMP = 2
+        steering = AMP * 0.3 * math.sin(2 * math.pi * FREQ * (time - WARMUP_TIME))
+
     return throttle, steering, braking, finished
 
 
-scripted_driver.left_circle_done = False   # the driver's only piece of memory
+scripted_driver.count = 0   # the driver's only piece of memory
 
 
 def main():
