@@ -22,8 +22,9 @@ SECTIONS = {
         "yaw_deg": 0.0,
         "min_target_distance_m": 0.0,  # re-draw the spawn if it starts closer than this to the target
     },
+    # The ground. (Planned: patches, ramps, SCM soft soil.)
     "terrain": {
-        "type": "rigid_flat",          # the ground: one flat rigid patch slightly larger than the arena
+        "type": "rigid_flat",          # one flat rigid patch slightly larger than the arena
         "friction": 0.9,               # friction coefficient of the ground
     },
 }

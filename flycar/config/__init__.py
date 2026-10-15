@@ -30,6 +30,21 @@ class ScenarioError(ValueError):
     """Raised when a scenario file contains something we do not understand."""
 
 
+def require_defaults(values, defaults, section, where):
+    """Reject any setting in ``values`` that differs from its default.
+
+    For settings that are reserved for a planned feature but not implemented
+    yet: the default (today's behaviour) is accepted, anything else is an
+    error rather than being silently ignored.
+    """
+    for key, default in defaults.items():
+        if values[key] != default:
+            raise ScenarioError(
+                f"{where}: {section}.{key}: {values[key]} is not implemented yet "
+                f"(only the default, {default}, works today)."
+            )
+
+
 # Imported AFTER ScenarioError exists, because every team module imports it.
 from flycar.config import core, vehicle, vision, world  # noqa: E402
 

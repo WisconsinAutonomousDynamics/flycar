@@ -7,7 +7,7 @@ units) to the section below, and a check for it in ``validate``. Defaults must
 reproduce the current behaviour exactly.
 """
 
-from flycar.config import ScenarioError
+from flycar.config import ScenarioError, require_defaults
 
 SECTIONS = {
     "eyes": {
@@ -21,7 +21,14 @@ SECTIONS = {
         "shadows": True,           # raycast backend: test whether each surface point can see each light
         "camera_width_px": 240,    # sensor backend: raw image width (height follows from the FOVs)
         "mount_m": [1.0, 0.3, 0.75],   # eye position on the chassis: forward, sideways (mirrored), up
+        "noise_std": 0.0,          # (planned) standard deviation of pixel noise; 0 = no noise
+        "motion_blur": False,      # (planned) blur the picture while the car turns
     },
+}
+
+# Settings reserved for planned features: only these values work today.
+NOT_YET_IMPLEMENTED = {
+    "eyes": {"noise_std": 0.0, "motion_blur": False},
 }
 
 
@@ -41,3 +48,6 @@ def validate(scenario, where):
 
     if scenario["eyes"]["backend"] not in ("auto", "sensor", "raycast"):
         raise ScenarioError(f"{where}: eyes.backend must be auto, sensor or raycast.")
+
+    for section, defaults in NOT_YET_IMPLEMENTED.items():
+        require_defaults(scenario[section], defaults, section, where)

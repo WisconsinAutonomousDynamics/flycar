@@ -1,13 +1,14 @@
 """Scenario settings owned by the world team.
 
-Sections: ``arena``, ``lighting``, ``lights`` (a list), ``obstacles`` (a list).
+Sections: ``arena``, ``lighting``, ``lights`` (a list), ``obstacles`` (a list),
+``motion``.
 
 Add a setting by adding a key (with a comment saying what it does and its
 units) to a section below, and a check for it in ``validate``. Defaults must
 reproduce the current behaviour exactly.
 """
 
-from flycar.config import ScenarioError
+from flycar.config import ScenarioError, require_defaults
 
 SECTIONS = {
     "arena": {
@@ -22,6 +23,17 @@ SECTIONS = {
     },
     "lights": [],
     "obstacles": [],
+    # Things that move during an episode. (Planned, not implemented: moving
+    # obstacles and lights. Today everything stands still.)
+    "motion": {
+        "obstacles": [],
+        "lights": [],
+    },
+}
+
+# Settings reserved for planned features: only these values work today.
+NOT_YET_IMPLEMENTED = {
+    "motion": {"obstacles": [], "lights": []},
 }
 
 ITEM_DEFAULTS = {
@@ -61,3 +73,6 @@ def validate(scenario, where):
             raise ScenarioError(
                 f"{where}: a {obstacle['shape']} obstacle needs {expected} numbers in size_m, got {obstacle['size_m']}."
             )
+
+    for section, defaults in NOT_YET_IMPLEMENTED.items():
+        require_defaults(scenario[section], defaults, section, where)

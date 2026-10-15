@@ -94,3 +94,29 @@ def test_every_section_comes_from_exactly_one_team_module():
         seen.extend(module.SECTIONS)
     assert sorted(seen) == sorted(config.DEFAULTS)
     assert len(seen) == len(set(seen))
+
+
+@pytest.mark.parametrize("settings, message", [
+    ({"terrain": {"type": "scm"}}, "terrain.type: scm is not implemented yet"),
+    ({"motion": {"lights": [{"x": 1.0}]}}, "motion.lights"),
+    ({"motion": {"obstacles": [{"x": 1.0}]}}, "motion.obstacles"),
+    ({"contact": {"mode": "force"}}, "contact.mode: force is not implemented yet"),
+    ({"termination": {"flipped": True}}, "termination.flipped"),
+    ({"termination": {"stuck_s": 3.0}}, "termination.stuck_s"),
+    ({"termination": {"left_arena": True}}, "termination.left_arena"),
+    ({"eyes": {"noise_std": 0.1}}, "eyes.noise_std"),
+    ({"eyes": {"motion_blur": True}}, "eyes.motion_blur"),
+])
+def test_reserved_settings_reject_anything_but_the_default(settings, message):
+    with pytest.raises(ScenarioError, match=message.replace(".", r"\.")):
+        load_scenario(settings)
+
+
+def test_reserved_sections_default_to_todays_behaviour():
+    scenario = load_scenario({})
+    assert scenario["terrain"] == {"type": "rigid_flat", "friction": 0.9}
+    assert scenario["motion"] == {"obstacles": [], "lights": []}
+    assert scenario["contact"] == {"mode": "flag"}
+    assert scenario["termination"] == {"flipped": False, "stuck_s": None, "left_arena": False}
+    assert scenario["eyes"]["noise_std"] == 0.0
+    assert scenario["eyes"]["motion_blur"] is False
