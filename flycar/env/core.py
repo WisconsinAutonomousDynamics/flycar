@@ -5,6 +5,7 @@ This file owns the Chrono ``ChSystem`` and the time loop. The pieces it uses:
     scenario.py   reads the YAML experiment description
     world.py      terrain, walls, obstacles, lights
     vehicle.py    the car, and action -> driver inputs
+    terrain.py    the ground
     sensing/      eyes, IMU, contact
     spaces.py     what an action and an observation look like
 
@@ -42,6 +43,7 @@ from flycar.env.sensing.contact import ContactSensor
 from flycar.env.sensing.eyes import choose_backend, make_eyes
 from flycar.env.sensing.imu import Imu
 from flycar.env.spaces import make_action_space, make_observation_space
+from flycar.env.terrain import Terrain
 from flycar.env.vehicle import FlyCarVehicle
 from flycar.env.world import World, sample_layout
 
@@ -51,6 +53,18 @@ SETTLE_TIME_S = 0.5
 
 # The 3D window is redrawn at most this often, in simulated time [s].
 RENDER_PERIOD_S = 0.02
+
+# Components that may offer debug data through an optional ``extra_info()``
+# method, and the team (slug) each belongs to. Their dicts end up in
+# info["extras"][slug][component]. See INFO_FIELDS in spaces.py.
+EXTRA_INFO_SOURCES = (
+    ("vehicle", "vehicle"),
+    ("terrain", "vehicle"),
+    ("world", "world"),
+    ("eyes", "vision"),
+    ("imu", "core"),
+    ("contact", "core"),
+)
 
 
 class FlyCarEnv(gymnasium.Env):
@@ -98,6 +112,7 @@ class FlyCarEnv(gymnasium.Env):
         # Everything below is (re)built by reset().
         self.system = None
         self.vehicle = None
+        self.terrain = None
         self.world = None
         self.eyes = None
         self.imu = None
@@ -139,6 +154,9 @@ class FlyCarEnv(gymnasium.Env):
             self.system, spawn_x, spawn_y, spawn_yaw,
             self.scenario["vehicle"], self.physics_step, visualize=needs_visuals,
         )
+        # The terrain is built before the world, so Chrono receives its bodies
+        # in the same order as always (the ground patch, then the walls).
+        self.terrain = Terrain(self.system, self.layout, self.scenario["terrain"], visualize=needs_visuals)
         self.world = World(self.system, self.layout, visualize=needs_visuals)
 
         # Create the collision system LAST, so that it picks up every collision
@@ -146,7 +164,7 @@ class FlyCarEnv(gymnasium.Env):
         self.system.SetCollisionSystemType(chrono.ChCollisionSystem.Type_BULLET)
 
         # 3) Sensors.
-        self.eyes = make_eyes(self.eye_backend, self.system, self.vehicle, self.layout, self.scenario["eyes"])
+        self.eyes = make_eyes(self.eye_backend, self.system, self.vehicle, self.world, self.scenario["eyes"])
         self.imu = Imu(self.vehicle)
         self.contact = ContactSensor(self.system, self.vehicle)
 
@@ -227,6 +245,7 @@ class FlyCarEnv(gymnasium.Env):
         self.imu = None
         self.contact = None
         self.world = None
+        self.terrain = None
         self.vehicle = None
         self.system = None
 
@@ -258,12 +277,15 @@ class FlyCarEnv(gymnasium.Env):
 
         # Phase 1, "Synchronize": every subsystem reads the current time and
         # its inputs (the car reads the driver inputs and the terrain).
+        # This order is a frozen contract (docs/CONTRACTS.md).
+        self.terrain.synchronize(time)
         self.world.synchronize(time)
-        self.vehicle.synchronize(time, self.world.terrain)
+        self.vehicle.synchronize(time, self.terrain.chrono_terrain)
         if self.window is not None:
             self.window.Synchronize(time, self.vehicle.inputs)
 
         # Phase 2, "Advance": every subsystem moves forward in time.
+        self.terrain.advance(step)
         self.world.advance(step)
         self.vehicle.advance(step)
         if self.window is not None:
@@ -326,7 +348,22 @@ class FlyCarEnv(gymnasium.Env):
             "time": self._time(),
             "step": self.step_count,
             "success": success,
+            "extras": self._extras(),
         }
+
+    def _extras(self):
+        """Collect the optional debug data of every component, keyed by team.
+
+        A component takes part by defining ``extra_info()`` returning a dict.
+        Components without that method are skipped.
+        """
+        extras = {}
+        for component, team in EXTRA_INFO_SOURCES:
+            extra_info = getattr(getattr(self, component), "extra_info", None)
+            if extra_info is None:
+                continue
+            extras.setdefault(team, {})[component] = extra_info()
+        return extras
 
     # ------------------------------------------------------------------------
     # The optional 3D window

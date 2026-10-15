@@ -6,7 +6,7 @@
 ``spaces.py`` is the single source of truth for the action and observation
 definitions. Everything in docs/API.md between the two marker comments is
 generated from it; the rest of that file is written by hand. A test
-(tests/test_api_docs.py) fails if the two ever disagree, so after changing
+(tests/test_contracts.py) fails if the two ever disagree, so after changing
 ``spaces.py`` just run this script.
 """
 

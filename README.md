@@ -101,6 +101,7 @@ python run.py --scenario scenarios/light_seek.yaml --driver braitenberg
 | `--episodes 20` | Run 20 episodes (seeds 0 to 19) and print the success rate. |
 | `--seed 7` | Start from a particular seed. The same seed gives the same episode. |
 | `--log` | Save a Parquet log per episode into `logs/`. |
+| `--log-extras` | Also store `info["extras"]`, the teams' unstable debug data, in the log. |
 | `--eyes raycast` | Force an eye backend (`auto`, `sensor`, `raycast`). |
 | `--realtime` | Do not run faster than real time. |
 
@@ -129,7 +130,8 @@ lights, where the car spawns, how long an episode lasts. **A new experiment is
 a new YAML file, not a code change.** Wherever a scenario wants a position or
 an angle you can write a number, or `[min, max]` to have it drawn at random on
 every reset. Copy `scenarios/light_seek.yaml` and edit it; every available
-setting and its default is listed at the top of `flycar/env/scenario.py`.
+setting and its default is listed in `flycar/config/`, one file per team
+(`core.py`, `vehicle.py`, `world.py`, `vision.py`).
 
 ### Eyes: two backends
 
@@ -188,39 +190,32 @@ The tests run headless and check, among other things, that the same seed and
 actions reproduce a trajectory bit for bit, that `N` steps advance time by
 exactly `N` control periods, and that no driver imports `pychrono`.
 
+Each team has its own test file (`tests/test_vehicle.py`, `test_world.py`,
+`test_vision.py`, `test_core.py`, `test_tools.py`). `tests/test_baseline.py`
+replays recorded reference runs and fails if a change alters the default
+behaviour; `tests/test_contracts.py` guards the frozen interfaces.
+
 If you change `flycar/env/spaces.py`, run `python scripts/gen_api_docs.py` to
 update the tables in `docs/API.md` (a test will remind you).
 
 ## How the code is organised
 
-```
-run.py                     run a driver in a scenario (start reading here)
-scenarios/                 experiments, as YAML
-tutorials/                 the three learning scripts
-flycar/
-  env/
-    core.py                FlyCarEnv: reset() and step(), owns the Chrono system and the time loop
-    spaces.py              what an action and an observation ARE (single source of truth)
-    scenario.py            loads a scenario file, lists every setting and its default
-    world.py               terrain, walls, obstacles, lights
-    vehicle.py             the car; turns an action into Chrono driver inputs
-    sensing/
-      eyes.py              compound eyes, both backends
-      imu.py               speed, turn rate, acceleration
-      contact.py           touch flags
-  drivers/                 controllers (no pychrono allowed in here)
-    base.py                the Driver interface
-    braitenberg.py         steer towards the light
-    random_driver.py
-    keyboard.py
-  tools/
-    logger.py              per-step Parquet logs
-    replay.py              plot a finished run
-    dashboard.py           live view
-docs/API.md                the action / observation reference
-scripts/check_env.py       is my installation working?
-tests/
-```
+Five teams own the code, each with its own page in [`docs/teams/`](docs/teams/):
+what it owns, its config section, its tests and scratch scenario, and the
+contracts it must not break. The Phase 1 work guides (what each team builds)
+are in [`teams/`](teams/).
+
+| Team | Owns | Page |
+|---|---|---|
+| Vehicle & terrain | `flycar/env/vehicle.py`, `flycar/env/terrain.py` | [vehicle.md](docs/teams/vehicle.md) |
+| World | `flycar/env/world.py`, `scenarios/` | [world.md](docs/teams/world.md) |
+| Vision | `flycar/env/sensing/eyes.py`, `sensor_probe.py` | [vision.md](docs/teams/vision.md) |
+| Core & body sensing | `flycar/env/core.py`, `sensing/imu.py`, `sensing/contact.py` | [core.md](docs/teams/core.md) |
+| Tools & drivers | `flycar/tools/`, `flycar/drivers/`, `run.py` | [tools.md](docs/teams/tools.md) |
+
+The interfaces between them are frozen and listed in
+[`docs/CONTRACTS.md`](docs/CONTRACTS.md); `.github/CODEOWNERS` says who reviews
+what. Start reading at `run.py`.
 
 The one design rule: **everything left of the line knows about Chrono,
 everything right of it does not.**

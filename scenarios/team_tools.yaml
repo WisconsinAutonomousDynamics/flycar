@@ -1,0 +1,60 @@
+# Scratch scenario of the Tools & drivers team (slug: tools). Owned by that team.
+#
+# Edit it freely to try out your team's features (see docs/teams/tools.md).
+# It started as a copy of light_seek.yaml. The frozen baselines
+# (empty_arena.yaml, light_seek.yaml) must not be changed.
+#
+#   python run.py --scenario scenarios/team_tools.yaml --driver braitenberg
+#
+# Find the lamp. A dark arena with one lamp and a few obstacles.
+#
+#   python run.py --scenario scenarios/light_seek.yaml --driver braitenberg
+#
+# The car starts on the west side, the lamp is somewhere on the east side, and
+# a few boxes and pillars stand in between. The episode ends in success when
+# the car gets within success_radius_m of the lamp.
+#
+# Any setting not listed here keeps its default from flycar/config/ (one file per team).
+# Positions and angles accept a number (fixed) or [min, max] (random each reset).
+
+name: team_tools
+description: Night-time arena. Reach the lamp. Randomized lamp, spawn and obstacles.
+
+episode:
+  max_time_s: 40.0
+  success_radius_m: 2.5
+
+arena:
+  size_m: [50.0, 40.0]
+  walls: true
+
+spawn:
+  x: [-20.0, -14.0]
+  y: [-12.0, 12.0]
+  yaw_deg: [-60.0, 60.0]        # roughly facing east, so the lamp starts in view
+  min_target_distance_m: 20.0
+
+lighting:
+  ambient: 0.08                 # night: surfaces are barely visible without the lamp
+  sky: 0.04                     # as dark as unlit ground, so only the lamp stands out
+
+lights:
+  - x: [8.0, 20.0]
+    y: [-14.0, 14.0]
+    z: 1.5
+    intensity: 1.0
+    falloff_m: 6.0
+    target: true
+
+obstacles:
+  - shape: box
+    size_m: [2.0, 2.0, 1.5]     # length, width, height
+    x: [-8.0, 4.0]
+    y: [-15.0, 15.0]
+    yaw_deg: [0.0, 90.0]
+    count: 2
+  - shape: cylinder
+    size_m: [0.8, 1.5]          # radius, height
+    x: [-8.0, 4.0]
+    y: [-15.0, 15.0]
+    count: 2

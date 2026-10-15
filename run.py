@@ -7,6 +7,7 @@ Useful extras:
     --episodes 20        run 20 episodes (seeds 0..19) and print the success rate
     --seed 7             start from seed 7 instead of 0
     --log                write one Parquet log per episode into logs/
+    --log-extras         also log info["extras"] (the teams' debug data; implies --log)
     --dashboard          live matplotlib view (map, eyes, control traces)
     --render             3D Irrlicht window that follows the car
     --eyes raycast       force an eye backend (auto, sensor or raycast)
@@ -38,7 +39,7 @@ def run_episode(env, driver, seed, args):
 
         name = f"{env.scenario['name']}_{args.driver.split(':')[-1]}_seed{seed}.parquet"
         details = {"scenario": env.scenario["name"], "driver": args.driver, "seed": seed}
-        logger = EpisodeLogger(Path(args.log) / name, info["world"], details)
+        logger = EpisodeLogger(Path(args.log) / name, info["world"], details, log_extras=args.log_extras)
 
     dashboard = None
     if args.dashboard:
@@ -95,12 +96,16 @@ def main():
     parser.add_argument("--episodes", type=int, default=1, help="Number of episodes; seeds count up from --seed")
     parser.add_argument("--log", nargs="?", const="logs", default=None, metavar="DIR",
                         help="Write a Parquet log per episode into DIR (default DIR: logs)")
+    parser.add_argument("--log-extras", action="store_true",
+                        help="Also store info['extras'] (unstable team debug data) in the log; implies --log")
     parser.add_argument("--dashboard", action="store_true", help="Show the live matplotlib dashboard")
     parser.add_argument("--render", action="store_true", help="Show the 3D Irrlicht window")
     parser.add_argument("--eyes", choices=["auto", "sensor", "raycast"], default=None,
                         help="Override the scenario's eye backend")
     parser.add_argument("--realtime", action="store_true", help="Slow the run down to real time")
     args = parser.parse_args()
+    if args.log_extras and args.log is None:
+        args.log = "logs"
 
     driver = make_driver(args.driver)
 
