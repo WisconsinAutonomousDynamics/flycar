@@ -37,8 +37,8 @@ import pychrono as chrono
 import pychrono.vehicle as veh
 
 TIME_STEP = 0.001      # s
-TARGET_SPEED = 3.0     # m/s
-STEERING = 0.7         # fraction of full lock used in the turns
+TARGET_SPEED = 3.0    # m/s
+STEERING = 0.7        # fraction of full lock used in the turns
 WARMUP_TIME = 2.0      # s of driving straight before the first circle
 MAX_TIME = 60.0        # s, safety stop
 
@@ -76,6 +76,23 @@ def scripted_driver(time, speed, turned):
 
 scripted_driver.left_circle_done = False   # the driver's only piece of memory
 
+def sine_driver(time, speed, turned):
+    """Steer with a sine wave: left, right, left, right..."""
+    throttle = min(1.0, max(0.0, 0.5 * (TARGET_SPEED - speed)))   # same cruise control
+    braking = 0.0
+    finished = False
+
+    # amplitude 0.6 of full lock; 0.25 Hz means one full wiggle every 4 seconds
+    steering = 0.6 * math.sin(2.0 * math.pi * 0.25 * time)
+
+    if time > 12.0:               # stop after 12 s of driving
+        throttle = 0.0
+        braking = 1.0
+        steering = 0.0
+        finished = True
+    return throttle, steering, braking, finished
+
+    
 
 def main():
     parser = argparse.ArgumentParser(description="Tutorial 3: a Gator driving a figure-8.")
@@ -142,7 +159,7 @@ def main():
             turned += vehicle.GetYawRate() * TIME_STEP
 
         # The driver decides.
-        throttle, steering, braking, finished = scripted_driver(time, speed, turned)
+        throttle, steering, braking, finished = sine_driver(time, speed, turned)
         inputs.m_throttle = throttle
         inputs.m_steering = steering    # -1 = full right ... +1 = full left
         inputs.m_braking = braking

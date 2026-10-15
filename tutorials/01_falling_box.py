@@ -53,7 +53,7 @@ def simulate():
     # The contact material says how surfaces behave when they touch.
     material = chrono.ChContactMaterialNSC()
     material.SetFriction(0.5)
-    material.SetRestitution(0.0)   # 0 = no bounce, 1 = perfect bounce
+    material.SetRestitution(0.8)   # 0 = no bounce, 1 = perfect bounce
 
     # ---- 3. The floor --------------------------------------------------------
     # ChBodyEasyBox(size_x, size_y, size_z, density, visualize, collide, material)
@@ -66,6 +66,7 @@ def simulate():
     # ---- 4. The box ----------------------------------------------------------
     box = chrono.ChBodyEasyBox(BOX_SIZE, BOX_SIZE, BOX_SIZE, 1000, True, True, material)
     box.SetPos(chrono.ChVector3d(0, 0, DROP_HEIGHT))
+    box.SetPosDt(chrono.ChVector3d(2, 0, 0))
     system.Add(box)
     print(f"The box weighs {box.GetMass():.1f} kg (its volume times the density, 1000 kg/m^3).")
 
@@ -76,6 +77,8 @@ def simulate():
         times.append(system.GetChTime())
         heights.append(box.GetPos().z)
         system.DoStepDynamics(TIME_STEP)   # advance everything by one time step
+
+    print(f"Final box pos: {box.GetPos()}")
 
     return np.array(times), np.array(heights)
 
