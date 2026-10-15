@@ -152,7 +152,7 @@ class FlyCarEnv(gymnasium.Env):
         self.system.SetCollisionSystemType(chrono.ChCollisionSystem.Type_BULLET)
 
         # 3) Sensors.
-        self.eyes = make_eyes(self.eye_backend, self.system, self.vehicle, self.layout, self.scenario["eyes"])
+        self.eyes = make_eyes(self.eye_backend, self.system, self.vehicle, self.world, self.scenario["eyes"])
         self.imu = Imu(self.vehicle)
         self.contact = ContactSensor(self.system, self.vehicle)
 

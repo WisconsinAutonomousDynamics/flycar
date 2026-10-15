@@ -256,3 +256,58 @@ def test_an_obstacle_hides_the_lamp(make_env):
 
     assert bright["eye_left"].max() > 0.3
     assert dark["eye_left"].max() < 0.5 * bright["eye_left"].max()
+
+
+def test_raycast_eyes_follow_the_lights_the_world_reports(make_env):
+    """Eyes ask World.current_lights() on every picture, so a moved lamp is seen moved."""
+    scenario = small_scenario(lights=[{"x": 5.0, "y": 6.0, "target": True}],
+                              lighting={"ambient": 0.05, "sky": 0.02})
+    env = make_env(scenario)
+    env.reset(seed=0)
+    left, right = env.eyes.render()
+    assert left.max() > right.max() + 0.1                   # lamp on the left
+
+    # Pretend World moved the lamp to the right-hand side.
+    moved = [dict(light, y=-6.0) for light in env.world.layout["lights"]]
+    env.world.current_lights = lambda: moved
+    left, right = env.eyes.render()
+    assert right.max() > left.max() + 0.1
+
+
+def test_sensor_eyes_move_their_scene_lights_when_the_world_moves_a_lamp():
+    """SensorEyes.update() logic, without a GPU: a stand-in sensor manager records the calls."""
+    from flycar.env.sensing.eyes import SensorEyes
+
+    class FakeScene:
+        def __init__(self):
+            self.modified = []
+
+        def ModifyPointLight(self, light_id, position, color, max_range):
+            self.modified.append((light_id, position.x, position.y))
+
+    class FakeManager:
+        def __init__(self):
+            self.scene = FakeScene()
+            self.updates = 0
+
+        def Update(self):
+            self.updates += 1
+
+    class FakeWorld:
+        lights = [{"x": 1.0, "y": 2.0, "z": 1.5, "intensity": 1.0, "falloff_m": 6.0, "target": True}]
+
+        def current_lights(self):
+            return [dict(light) for light in self.lights]
+
+    eyes = SensorEyes.__new__(SensorEyes)   # skip __init__: it needs a GPU
+    eyes.world = FakeWorld()
+    eyes.manager = FakeManager()
+    eyes.light_ids = [7]
+    eyes.light_positions = [(1.0, 2.0, 1.5)]
+
+    eyes.update()
+    assert eyes.manager.scene.modified == []                 # nothing moved
+    eyes.world.lights[0]["y"] = -3.0
+    eyes.update()
+    assert eyes.manager.scene.modified == [(7, 1.0, -3.0)]
+    assert eyes.manager.updates == 2

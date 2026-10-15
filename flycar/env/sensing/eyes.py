@@ -102,11 +102,16 @@ def choose_backend(requested):
     return "raycast", f"sensor backend unavailable ({reason})"
 
 
-def make_eyes(backend, system, vehicle, layout, config):
-    """Create the eye object for a backend name returned by choose_backend."""
+def make_eyes(backend, system, vehicle, world, config):
+    """Create the eye object for a backend name returned by choose_backend.
+
+    ``world`` is the ``World`` of this episode. The eyes ask it where the
+    lights are (``world.current_lights()``) every time they need to know, and
+    read the ambient and sky brightness from ``world.layout``.
+    """
     if backend == "sensor":
-        return SensorEyes(system, vehicle, layout, config)
-    return RaycastEyes(system, vehicle, layout, config)
+        return SensorEyes(system, vehicle, world, config)
+    return RaycastEyes(system, vehicle, world, config)
 
 
 # ----------------------------------------------------------------------------
@@ -183,12 +188,12 @@ class RaycastEyes:
 
     name = "raycast"
 
-    def __init__(self, system, vehicle, layout, config):
+    def __init__(self, system, vehicle, world, config):
         self.system = system
         self.vehicle = vehicle
-        self.lights = layout["lights"]
-        self.ambient = layout["lighting"]["ambient"]
-        self.sky = layout["lighting"]["sky"]
+        self.world = world
+        self.ambient = world.layout["lighting"]["ambient"]
+        self.sky = world.layout["lighting"]["sky"]
         self.rows, self.cols = int(config["resolution"][0]), int(config["resolution"][1])
         self.max_range = float(config["max_range_m"])
         self.shadows = bool(config["shadows"])
@@ -217,12 +222,15 @@ class RaycastEyes:
         chassis_position = self.vehicle.position()
         chassis_rotation = self.vehicle.rotation_matrix()
 
+        # Ask the world where the lights are now (they may move one day).
+        lights = self.world.current_lights()
+
         images = {}
         for side, (mount_position, _) in self.mounts.items():
             # Chassis frame -> world frame.
             origin = chassis_position + chassis_rotation @ mount_position
             directions = self.directions[side] @ chassis_rotation.T
-            images[side] = self._render_one_eye(origin, directions)
+            images[side] = self._render_one_eye(origin, directions, lights)
         return images["left"], images["right"]
 
     def raw_images(self):
@@ -263,7 +271,7 @@ class RaycastEyes:
                 normal[i] = (hit_normal.x, hit_normal.y, hit_normal.z)
         return distance, normal
 
-    def _render_one_eye(self, origin, directions):
+    def _render_one_eye(self, origin, directions, lights):
         distance, normal = self._cast_rays(origin, directions)
         hit = np.isfinite(distance)
 
@@ -276,7 +284,7 @@ class RaycastEyes:
 
             # Light arriving at each point: ambient light, plus every lamp.
             received = np.full(len(points), self.ambient)
-            for light in self.lights:
+            for light in lights:
                 lamp = np.array([light["x"], light["y"], light["z"]])
                 to_lamp = lamp - points
                 lamp_distance = np.linalg.norm(to_lamp, axis=1)
@@ -303,7 +311,7 @@ class RaycastEyes:
 
         # The lamps themselves. A lamp far away is smaller than one pixel, so
         # it shows up as a soft glow that gets brighter as the car gets closer.
-        for light in self.lights:
+        for light in lights:
             lamp = np.array([light["x"], light["y"], light["z"]])
             to_lamp = lamp - origin
             lamp_distance = float(np.linalg.norm(to_lamp))
@@ -340,8 +348,10 @@ class SensorEyes:
 
     name = "sensor"
 
-    def __init__(self, system, vehicle, layout, config):
+    def __init__(self, system, vehicle, world, config):
         import pychrono.sensor as sens   # imported here: it only exists on some machines
+
+        self.world = world
 
         self.rows, self.cols = int(config["resolution"][0]), int(config["resolution"][1])
 
@@ -355,18 +365,21 @@ class SensorEyes:
 
         # ---- Scene lighting -------------------------------------------------
         self.manager = sens.ChSensorManager(system)
-        ambient = layout["lighting"]["ambient"]
-        sky = layout["lighting"]["sky"]
+        ambient = world.layout["lighting"]["ambient"]
+        sky = world.layout["lighting"]["sky"]
         self.manager.scene.SetAmbientLight(chrono.ChVector3f(ambient, ambient, ambient))
         background = sens.Background()
         background.mode = sens.BackgroundMode_SOLID_COLOR
         background.color_zenith = chrono.ChVector3f(sky, sky, sky)
         self.manager.scene.SetBackground(background)
-        for light in layout["lights"]:
-            # Just above the lamp ball, so the ball does not block its own light.
-            position = chrono.ChVector3f(light["x"], light["y"], light["z"] + LAMP_RADIUS_M + 0.1)
-            color = chrono.ChColor(light["intensity"], light["intensity"], light["intensity"])
-            self.manager.scene.AddPointLight(position, color, 10.0 * light["falloff_m"])
+        # One point light per lamp. Remember each one's id and position, so
+        # update() can move it if the world moves the lamp.
+        self.light_ids = []
+        self.light_positions = []
+        for light in world.current_lights():
+            position, color, max_range = self._point_light(light)
+            self.light_ids.append(self.manager.scene.AddPointLight(position, color, max_range))
+            self.light_positions.append((light["x"], light["y"], light["z"]))
 
         # ---- One camera per eye ---------------------------------------------
         update_rate_hz = 1.0 / config["update_period_s"]
@@ -393,8 +406,23 @@ class SensorEyes:
 
         self._raw = {"left": None, "right": None}
 
+    @staticmethod
+    def _point_light(light):
+        """(position, color, max_range) of the scene light for one lamp."""
+        # Just above the lamp ball, so the ball does not block its own light.
+        position = chrono.ChVector3f(light["x"], light["y"], light["z"] + LAMP_RADIUS_M + 0.1)
+        color = chrono.ChColor(light["intensity"], light["intensity"], light["intensity"])
+        return position, color, 10.0 * light["falloff_m"]
+
     def update(self):
         """Let the sensor manager render if a camera is due. Call every physics step."""
+        # Move any scene light whose lamp has moved since the last step.
+        for index, light in enumerate(self.world.current_lights()):
+            position = (light["x"], light["y"], light["z"])
+            if position != self.light_positions[index]:
+                point, color, max_range = self._point_light(light)
+                self.manager.scene.ModifyPointLight(self.light_ids[index], point, color, max_range)
+                self.light_positions[index] = position
         self.manager.Update()
 
     def render(self):

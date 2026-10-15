@@ -226,6 +226,16 @@ class World:
         system.Add(body)
         self.bodies.append(body)
 
+    def current_lights(self):
+        """Where the lights are right now, in the world frame.
+
+        Returns a list of dicts with the same keys as ``layout["lights"]``
+        entries: x, y, z, intensity, falloff_m, target. The eyes call this every
+        time they take a picture, so if lights ever move, only this method has
+        to change. Today nothing moves, so it returns the layout lights.
+        """
+        return [dict(light) for light in self.layout["lights"]]
+
     # The world uses the same two-phase update as the vehicle and the terrain.
     # Nothing in it moves yet, so both phases are empty. (They are where moving
     # obstacles and lights will be updated.)
