@@ -1,4 +1,6 @@
-"""The world: terrain, walls, obstacles and lights, built from a scenario.
+"""The world: walls, obstacles and lights, built from a scenario.
+
+(The ground is not part of the world: it lives in ``terrain.py``.)
 
 There are two steps, kept separate on purpose:
 
@@ -15,7 +17,6 @@ dashboard can draw the arena without importing pychrono. It is returned by
 import math
 
 import pychrono as chrono
-import pychrono.vehicle as veh
 
 from flycar.env.scenario import ScenarioError, sample
 
@@ -165,7 +166,7 @@ def sample_layout(scenario, rng):
 # ----------------------------------------------------------------------------
 
 class World:
-    """Chrono bodies for one episode: rigid terrain, walls, obstacles, lamps.
+    """Chrono bodies for one episode: walls, obstacles, lamps.
 
     Parameters
     ----------
@@ -187,17 +188,6 @@ class World:
         material = chrono.ChContactMaterialNSC()
         material.SetFriction(0.9)
         material.SetRestitution(0.01)
-
-        # ---- Rigid, flat terrain --------------------------------------------
-        # A patch a bit larger than the arena, with its top surface at z = 0.
-        size_x, size_y = layout["arena"]["size_m"]
-        margin = 2.0 * layout["arena"]["wall_thickness_m"] + 10.0
-        self.terrain = veh.RigidTerrain(system)
-        patch = self.terrain.AddPatch(material, chrono.CSYSNORM, size_x + margin, size_y + margin)
-        if visualize:
-            patch.SetColor(chrono.ChColor(0.45, 0.45, 0.42))
-            patch.SetTexture(veh.GetVehicleDataFile("terrain/textures/tile4.jpg"), size_x / 4.0, size_y / 4.0)
-        self.terrain.Initialize()
 
         # ---- Walls and obstacles --------------------------------------------
         for item in layout["walls"]:
@@ -236,10 +226,12 @@ class World:
         system.Add(body)
         self.bodies.append(body)
 
-    # The terrain uses the same two-phase update as the vehicle.
+    # The world uses the same two-phase update as the vehicle and the terrain.
+    # Nothing in it moves yet, so both phases are empty. (They are where moving
+    # obstacles and lights will be updated.)
 
     def synchronize(self, time):
-        self.terrain.Synchronize(time)
+        """Phase 1: tell the world the current time."""
 
     def advance(self, step):
-        self.terrain.Advance(step)
+        """Phase 2: move the world forward in time."""

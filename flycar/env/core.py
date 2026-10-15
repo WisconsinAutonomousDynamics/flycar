@@ -5,6 +5,7 @@ This file owns the Chrono ``ChSystem`` and the time loop. The pieces it uses:
     scenario.py   reads the YAML experiment description
     world.py      terrain, walls, obstacles, lights
     vehicle.py    the car, and action -> driver inputs
+    terrain.py    the ground
     sensing/      eyes, IMU, contact
     spaces.py     what an action and an observation look like
 
@@ -42,6 +43,7 @@ from flycar.env.sensing.contact import ContactSensor
 from flycar.env.sensing.eyes import choose_backend, make_eyes
 from flycar.env.sensing.imu import Imu
 from flycar.env.spaces import make_action_space, make_observation_space
+from flycar.env.terrain import Terrain
 from flycar.env.vehicle import FlyCarVehicle
 from flycar.env.world import World, sample_layout
 
@@ -98,6 +100,7 @@ class FlyCarEnv(gymnasium.Env):
         # Everything below is (re)built by reset().
         self.system = None
         self.vehicle = None
+        self.terrain = None
         self.world = None
         self.eyes = None
         self.imu = None
@@ -139,6 +142,9 @@ class FlyCarEnv(gymnasium.Env):
             self.system, spawn_x, spawn_y, spawn_yaw,
             self.scenario["vehicle"], self.physics_step, visualize=needs_visuals,
         )
+        # The terrain is built before the world, so Chrono receives its bodies
+        # in the same order as always (the ground patch, then the walls).
+        self.terrain = Terrain(self.system, self.layout, self.scenario["terrain"], visualize=needs_visuals)
         self.world = World(self.system, self.layout, visualize=needs_visuals)
 
         # Create the collision system LAST, so that it picks up every collision
@@ -227,6 +233,7 @@ class FlyCarEnv(gymnasium.Env):
         self.imu = None
         self.contact = None
         self.world = None
+        self.terrain = None
         self.vehicle = None
         self.system = None
 
@@ -258,12 +265,15 @@ class FlyCarEnv(gymnasium.Env):
 
         # Phase 1, "Synchronize": every subsystem reads the current time and
         # its inputs (the car reads the driver inputs and the terrain).
+        # This order is a frozen contract (docs/CONTRACTS.md).
+        self.terrain.synchronize(time)
         self.world.synchronize(time)
-        self.vehicle.synchronize(time, self.world.terrain)
+        self.vehicle.synchronize(time, self.terrain.chrono_terrain)
         if self.window is not None:
             self.window.Synchronize(time, self.vehicle.inputs)
 
         # Phase 2, "Advance": every subsystem moves forward in time.
+        self.terrain.advance(step)
         self.world.advance(step)
         self.vehicle.advance(step)
         if self.window is not None:
