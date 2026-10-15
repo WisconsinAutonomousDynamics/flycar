@@ -149,3 +149,191 @@ def test_every_section_comes_from_exactly_one_team_module():
         seen.extend(module.SECTIONS)
     assert sorted(seen) == sorted(config.DEFAULTS)
     assert len(seen) == len(set(seen))
+
+
+# ----------------------------------------------------------------------------
+# Names and signatures from docs/CONTRACTS.md (contracts 2 to 8).
+# A pull request that renames one of these fails here.
+# ----------------------------------------------------------------------------
+
+def _parameters(function):
+    """Parameter names of a function or method, without ``self``."""
+    import inspect
+
+    return [name for name in inspect.signature(function).parameters if name != "self"]
+
+
+# Contract 2: the layout dict, key by key.
+LAYOUT_TYPES = {
+    "arena": dict,
+    "walls": list,
+    "obstacles": list,
+    "lights": list,
+    "target": (list, type(None)),
+    "spawn": list,
+    "lighting": dict,
+}
+ARENA_KEYS = {"size_m", "walls", "wall_height_m", "wall_thickness_m"}
+SOLID_KEYS = {"shape", "x", "y", "yaw", "size_m"}
+LIGHT_KEYS = {"x", "y", "z", "intensity", "falloff_m", "target"}
+
+
+def test_contract_2_layout_keys_and_types():
+    from flycar.env.world import sample_layout
+
+    assert _parameters(sample_layout) == ["scenario", "rng"]
+    scenario = load_scenario(REPO_ROOT / "scenarios" / "light_seek.yaml")
+    layout = sample_layout(scenario, np.random.default_rng(0))
+
+    assert set(layout) == set(LAYOUT_TYPES)
+    for key, expected in LAYOUT_TYPES.items():
+        assert isinstance(layout[key], expected), key
+    assert set(layout["arena"]) == ARENA_KEYS
+    assert len(layout["arena"]["size_m"]) == 2
+    assert isinstance(layout["arena"]["walls"], bool)
+    for solid in layout["walls"] + layout["obstacles"]:
+        assert set(solid) == SOLID_KEYS
+        assert solid["shape"] in ("box", "cylinder")
+    for light in layout["lights"]:
+        assert set(light) == LIGHT_KEYS
+        assert isinstance(light["target"], bool)
+    assert len(layout["target"]) == 2
+    assert len(layout["spawn"]) == 3
+    assert set(layout["lighting"]) == {"ambient", "sky"}
+
+
+VEHICLE_METHODS = {
+    "pose": [],
+    "position": [],
+    "velocity": [],
+    "rotation_matrix": [],
+    "forward_speed": [],
+    "yaw_rate": [],
+    "set_action": ["action", "control_period"],
+    "hold_brake": [],
+    "release_controls": [],
+}
+
+
+def test_contract_3_vehicle_accessors(make_env):
+    from flycar.env.vehicle import FlyCarVehicle
+
+    for name, parameters in VEHICLE_METHODS.items():
+        assert _parameters(getattr(FlyCarVehicle, name)) == parameters, name
+
+    env = make_env(small_scenario())
+    env.reset(seed=0)
+    for name in ("applied_action", "inputs", "vehicle"):
+        assert hasattr(env.vehicle, name), name
+    assert env.vehicle.pose().shape == (3,)
+    assert env.vehicle.rotation_matrix().shape == (3, 3)
+
+
+def test_contract_4_world_and_tags(make_env):
+    from flycar.env import vehicle, world
+
+    assert _parameters(world.World.current_lights) == []
+    assert world.WORLD_TAG_BASE == 1000
+    assert vehicle.CHASSIS_TAG == 500
+
+    env = make_env(small_scenario(lights=[{"x": 5.0, "y": 0.0}]))
+    _, info = env.reset(seed=0)
+    assert env.world.layout is env.layout
+    assert env.world.current_lights() == info["world"]["lights"]
+
+
+def test_contract_5_eyes_interface():
+    from flycar.env.sensing import eyes
+
+    assert _parameters(eyes.make_eyes) == ["backend", "system", "vehicle", "world", "config"]
+    for backend in (eyes.RaycastEyes, eyes.SensorEyes):
+        assert _parameters(backend.__init__) == ["system", "vehicle", "world", "config"], backend.__name__
+        assert _parameters(backend.update) == [], backend.__name__
+        assert _parameters(backend.render) == [], backend.__name__
+        assert _parameters(backend.raw_images) == [], backend.__name__
+
+
+def test_contract_6_terrain(make_env):
+    from flycar.env.terrain import Terrain
+
+    assert _parameters(Terrain.__init__) == ["system", "layout", "terrain_config", "visualize"]
+    assert _parameters(Terrain.synchronize) == ["time"]
+    assert _parameters(Terrain.advance) == ["step"]
+
+    env = make_env(small_scenario())
+    env.reset(seed=0)
+    assert env.terrain.chrono_terrain is not None
+
+
+def test_contract_7_physics_step_order(make_env):
+    """Record the calls made by one _physics_step() and compare with docs/CONTRACTS.md."""
+    env = make_env(small_scenario())
+    env.reset(seed=0)
+    calls = []
+
+    def recorder(label, method):
+        def wrapped(*args):
+            calls.append(label)
+            return method(*args)
+        return wrapped
+
+    def record_vehicle_synchronize(time, terrain):
+        assert terrain is env.terrain.chrono_terrain
+        calls.append("vehicle.synchronize")
+        return original_vehicle_synchronize(time, terrain)
+
+    original_vehicle_synchronize = env.vehicle.synchronize
+    env.terrain.synchronize = recorder("terrain.synchronize", env.terrain.synchronize)
+    env.world.synchronize = recorder("world.synchronize", env.world.synchronize)
+    env.vehicle.synchronize = record_vehicle_synchronize
+    env.terrain.advance = recorder("terrain.advance", env.terrain.advance)
+    env.world.advance = recorder("world.advance", env.world.advance)
+    env.vehicle.advance = recorder("vehicle.advance", env.vehicle.advance)
+    env.eyes.update = recorder("eyes.update", env.eyes.update)
+    env.contact.poll = recorder("contact.poll", env.contact.poll)
+
+    class RecordingSystem:
+        """Passes everything through to the real ChSystem, noting DoStepDynamics."""
+
+        def __init__(self, system):
+            self.system = system
+
+        def __getattr__(self, name):
+            return getattr(self.system, name)
+
+        def DoStepDynamics(self, step):
+            calls.append("system.DoStepDynamics")
+            return self.system.DoStepDynamics(step)
+
+    real_system = env.system
+    env.system = RecordingSystem(real_system)
+    try:
+        env._physics_step()
+    finally:
+        env.system = real_system
+
+    assert calls == [
+        "terrain.synchronize", "world.synchronize", "vehicle.synchronize",
+        "terrain.advance", "world.advance", "vehicle.advance",
+        "system.DoStepDynamics", "eyes.update", "contact.poll",
+    ]
+
+
+def test_contract_8_driver_protocol():
+    from flycar.drivers.base import Driver
+
+    assert _parameters(Driver.reset) == []
+    assert _parameters(Driver.act) == ["observation"]
+
+
+# ----------------------------------------------------------------------------
+# Ownership
+# ----------------------------------------------------------------------------
+
+def test_every_file_has_exactly_one_owner_in_codeowners():
+    """If this fails, run: python scripts/check_codeowners.py"""
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "check_codeowners.py")],
+        capture_output=True, text=True, cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
