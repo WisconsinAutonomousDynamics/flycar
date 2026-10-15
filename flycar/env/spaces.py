@@ -102,6 +102,7 @@ INFO_FIELDS = (
     ("time", "float", "s", "Simulation time since reset (same as obs['time'], as a Python float)."),
     ("step", "int", "-", "Number of control steps since reset."),
     ("success", "bool", "-", "True once the car is within the scenario's success radius of the target."),
+    ("extras", "dict", "-", "Unstable debug data, not part of the API; drivers never see it. Keyed by team slug (vehicle, world, vision, core), then by component: e.g. extras['core']['contact']. Empty when no component provides any."),
     ("world", "dict", "-", "Only returned by reset(): the layout of this episode (arena size, walls, obstacles, lights, target), as plain Python data for plotting."),
 )
 

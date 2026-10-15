@@ -20,6 +20,9 @@ eye_left, eye_right                     the full eye image, flattened row by row
                                         Stored every ``eye_every`` steps, empty otherwise.
 target_distance, target_bearing         ground truth [m, rad]
 success                                 True once the target is reached
+extras                                  ONLY with log_extras=True (run.py --log-extras):
+                                        info["extras"] as a JSON string. Left out by
+                                        default, so logs stay the same size.
 
 The world layout (walls, obstacles, lights) and run details are stored in the
 file's metadata, so ``replay.py`` can redraw the arena from the log alone.
@@ -56,13 +59,17 @@ class EpisodeLogger:
     eye_every : int
         Store the full eye images every this many steps. They are by far the
         biggest part of a log, and at 10 per second they replay smoothly.
+    log_extras : bool
+        Also store ``info["extras"]`` (the teams' unstable debug data) in an
+        ``extras`` column, as one JSON string per step. Off by default.
     """
 
-    def __init__(self, path, world, details=None, eye_every=10):
+    def __init__(self, path, world, details=None, eye_every=10, log_extras=False):
         self.path = Path(path)
         self.world = world
         self.details = dict(details or {})
         self.eye_every = int(eye_every)
+        self.log_extras = bool(log_extras)
         self.rows = []
 
     def log(self, action, observation, info):
@@ -102,6 +109,8 @@ class EpisodeLogger:
             "target_bearing": float(info["target_bearing"]),
             "success": bool(info["success"]),
         }
+        if self.log_extras:
+            row["extras"] = json.dumps(info.get("extras", {}), default=_plain)
         self.rows.append(row)
 
         # Remember the eye resolution so replay can un-flatten the images.
@@ -131,6 +140,15 @@ class EpisodeLogger:
         table = table.replace_schema_metadata({METADATA_KEY: json.dumps(metadata).encode("utf-8")})
         pq.write_table(table, self.path)
         return self.path
+
+
+def _plain(value):
+    """Turn NumPy values inside info["extras"] into things JSON can store."""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return str(value)
 
 
 def load_log(path):

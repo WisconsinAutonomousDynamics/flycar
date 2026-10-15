@@ -86,3 +86,22 @@ def test_dashboard_runs_headless_and_forwards_keys(make_env):
 
     dashboard.close()
     assert dashboard.update(observation, info) is False
+
+
+def test_logger_leaves_out_extras_unless_asked(make_env, tmp_path):
+    env = make_env(small_scenario())
+    observation, info = env.reset(seed=0)
+    plain = EpisodeLogger(tmp_path / "plain.parquet", info["world"])
+    with_extras = EpisodeLogger(tmp_path / "extras.parquet", info["world"], log_extras=True)
+    for _ in range(5):
+        action = np.array([0.5, 0.0, 0.0], dtype=np.float32)
+        observation, _, _, _, info = env.step(action)
+        info["extras"] = {"core": {"contact": {"force": np.float32(1.5), "points": np.zeros(2)}}}
+        plain.log(action, observation, info)
+        with_extras.log(action, observation, info)
+
+    table, _, _ = load_log(plain.close())
+    assert "extras" not in table.columns
+    table, _, _ = load_log(with_extras.close())
+    import json
+    assert json.loads(table["extras"].iloc[0]) == {"core": {"contact": {"force": 1.5, "points": [0.0, 0.0]}}}

@@ -311,3 +311,14 @@ def test_sensor_eyes_move_their_scene_lights_when_the_world_moves_a_lamp():
     eyes.update()
     assert eyes.manager.scene.modified == [(7, 1.0, -3.0)]
     assert eyes.manager.updates == 2
+
+
+def test_extras_collects_extra_info_by_team(make_env):
+    env = make_env(small_scenario())
+    _, info = env.reset(seed=0)
+    assert info["extras"] == {}               # nothing provides extra_info() yet
+
+    env.contact.extra_info = lambda: {"touches": 0}
+    env.terrain.extra_info = lambda: {"patch": "flat"}
+    _, _, _, _, info = env.step([0.0, 0.0, 0.0])
+    assert info["extras"] == {"core": {"contact": {"touches": 0}}, "vehicle": {"terrain": {"patch": "flat"}}}

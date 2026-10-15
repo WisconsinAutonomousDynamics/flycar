@@ -54,6 +54,18 @@ SETTLE_TIME_S = 0.5
 # The 3D window is redrawn at most this often, in simulated time [s].
 RENDER_PERIOD_S = 0.02
 
+# Components that may offer debug data through an optional ``extra_info()``
+# method, and the team (slug) each belongs to. Their dicts end up in
+# info["extras"][slug][component]. See INFO_FIELDS in spaces.py.
+EXTRA_INFO_SOURCES = (
+    ("vehicle", "vehicle"),
+    ("terrain", "vehicle"),
+    ("world", "world"),
+    ("eyes", "vision"),
+    ("imu", "core"),
+    ("contact", "core"),
+)
+
 
 class FlyCarEnv(gymnasium.Env):
     """A car in a walled arena, with compound eyes, an IMU and touch sensors.
@@ -336,7 +348,22 @@ class FlyCarEnv(gymnasium.Env):
             "time": self._time(),
             "step": self.step_count,
             "success": success,
+            "extras": self._extras(),
         }
+
+    def _extras(self):
+        """Collect the optional debug data of every component, keyed by team.
+
+        A component takes part by defining ``extra_info()`` returning a dict.
+        Components without that method are skipped.
+        """
+        extras = {}
+        for component, team in EXTRA_INFO_SOURCES:
+            extra_info = getattr(getattr(self, component), "extra_info", None)
+            if extra_info is None:
+                continue
+            extras.setdefault(team, {})[component] = extra_info()
+        return extras
 
     # ------------------------------------------------------------------------
     # The optional 3D window

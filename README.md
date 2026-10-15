@@ -101,6 +101,7 @@ python run.py --scenario scenarios/light_seek.yaml --driver braitenberg
 | `--episodes 20` | Run 20 episodes (seeds 0 to 19) and print the success rate. |
 | `--seed 7` | Start from a particular seed. The same seed gives the same episode. |
 | `--log` | Save a Parquet log per episode into `logs/`. |
+| `--log-extras` | Also store `info["extras"]`, the teams' unstable debug data, in the log. |
 | `--eyes raycast` | Force an eye backend (`auto`, `sensor`, `raycast`). |
 | `--realtime` | Do not run faster than real time. |
 
