@@ -1,6 +1,7 @@
 # Team: Vision (`vision`)
 
 This page belongs to the team. Keep it up to date here instead of in the README.
+The Phase 1 work guide (tasks, parts A to C) is [`teams/team-vision.md`](../../teams/team-vision.md).
 
 ## What you own
 
@@ -11,6 +12,8 @@ This page belongs to the team. Keep it up to date here instead of in the README.
 | `flycar/config/vision.py` | Scenario section `eyes`: defaults and checks |
 | `tests/test_vision.py` | Your tests |
 | `scenarios/team_vision.yaml` | Your scratch scenario |
+| `flycar/drivers/contrib/vision_driver.py` | Your capstone driver (observation only, no pychrono) |
+| `teams/team-vision.md` | Your Phase 1 work guide |
 | `docs/teams/vision.md` | This page |
 
 ## Contracts you must not break

@@ -8,10 +8,17 @@ ignored), find the CODEOWNERS lines that match it:
 * no line         -> a GAP: nobody reviews changes to that file. Error.
 * exactly one     -> fine.
 * more than one   -> an OVERRIDE. GitHub uses the last matching line. That is
-                     only allowed when the last line is in the frozen block at
-                     the end of the file (a frozen file inside a team folder,
-                     like scenarios/light_seek.yaml). Any other overlap is an
-                     error, because it hides which team really owns the file.
+                     only allowed when the last line is MORE SPECIFIC than
+                     every other line that matches: a file or folder inside
+                     the folder those lines name. For example
+                     /scenarios/light_seek.yaml (frozen, leads) listed after
+                     /scenarios/ (world). Any other overlap is an error,
+                     because it hides which team really owns the file (or
+                     makes a more specific line useless).
+
+Lines that match no file are listed as RESERVED, not as errors: some lines
+name files a team will create later (the capstone drivers in
+flycar/drivers/contrib/). Check that list for typos and stale paths.
 
 Exit code 0 when there are no errors, 1 otherwise.
 
@@ -28,22 +35,16 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CODEOWNERS = REPO_ROOT / ".github" / "CODEOWNERS"
 
-# The comment line that starts the frozen block in CODEOWNERS.
-FROZEN_MARKER = "# ---- Frozen"
-
 
 def read_rules(path):
-    """Return a list of (line_number, pattern, owners, frozen) from CODEOWNERS."""
+    """Return a list of (line_number, pattern, owners) from CODEOWNERS."""
     rules = []
-    frozen = False
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         stripped = line.strip()
-        if stripped.startswith(FROZEN_MARKER):
-            frozen = True
         if not stripped or stripped.startswith("#"):
             continue
         pattern, *owners = stripped.split()
-        rules.append((number, pattern, owners, frozen))
+        rules.append((number, pattern, owners))
     return rules
 
 
@@ -57,6 +58,11 @@ def matches(pattern, file):
     return file == anchored
 
 
+def is_inside(inner, outer):
+    """True if pattern ``inner`` names something strictly inside folder pattern ``outer``."""
+    return outer.endswith("/") and inner != outer and inner.startswith(outer)
+
+
 def repository_files():
     """Every file git tracks, plus new files that are not ignored."""
     output = subprocess.run(
@@ -68,7 +74,7 @@ def repository_files():
 
 
 def check():
-    """Return (gaps, bad_overlaps, overrides, unused) as lists of human-readable lines."""
+    """Return (gaps, bad_overlaps, overrides, reserved) as lists of human-readable lines."""
     rules = read_rules(CODEOWNERS)
     files = repository_files()
     gaps, bad_overlaps, overrides = [], [], []
@@ -78,34 +84,34 @@ def check():
         if not hits:
             gaps.append(file)
         elif len(hits) > 1:
-            lines = ", ".join(f"line {number} ({pattern})" for number, pattern, _, _ in hits)
-            winner_is_frozen = hits[-1][3]
-            if winner_is_frozen and len(hits) == 2 and not hits[0][3]:
-                overrides.append(f"{file}: {lines}; frozen line wins")
+            lines = ", ".join(f"line {number} ({pattern})" for number, pattern, _ in hits)
+            winner = hits[-1][1]
+            if all(is_inside(winner, pattern) for _, pattern, _ in hits[:-1]):
+                overrides.append(f"{file}: {lines}; line {hits[-1][0]} wins")
             else:
                 bad_overlaps.append(f"{file}: {lines}")
 
-    # A pattern that matches nothing is probably a typo or a stale path.
-    unused = [f"line {number}: {pattern}" for number, pattern, _, _ in rules
-              if not any(matches(pattern, file) for file in files)]
-    return gaps, bad_overlaps, overrides, unused
+    # A line that matches nothing is either reserved for a file to come, or a typo.
+    reserved = [f"line {number}: {pattern}" for number, pattern, _ in rules
+                if not any(matches(pattern, file) for file in files)]
+    return gaps, bad_overlaps, overrides, reserved
 
 
 def main():
-    gaps, bad_overlaps, overrides, unused = check()
+    gaps, bad_overlaps, overrides, reserved = check()
 
     print(f"Checked {len(repository_files())} files against {CODEOWNERS.relative_to(REPO_ROOT)}.")
     for title, items in (
         ("Files no CODEOWNERS line covers (gaps)", gaps),
-        ("Files covered by more than one team line", bad_overlaps),
-        ("CODEOWNERS lines that match no file", unused),
-        ("Frozen overrides (expected)", overrides),
+        ("Files whose matching lines overlap the wrong way", bad_overlaps),
+        ("Lines that match no file yet (reserved; check for typos)", reserved),
+        ("Specific lines overriding a folder line (expected)", overrides),
     ):
         print(f"\n{title}: {len(items)}")
         for item in items:
             print(f"  {item}")
 
-    errors = len(gaps) + len(bad_overlaps) + len(unused)
+    errors = len(gaps) + len(bad_overlaps)
     print("\nRESULT:", "OK" if errors == 0 else f"{errors} problem(s)")
     return 0 if errors == 0 else 1
 

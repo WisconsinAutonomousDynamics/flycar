@@ -1,6 +1,7 @@
 # Team: Vehicle & terrain (`vehicle`)
 
 This page belongs to the team. Keep it up to date here instead of in the README.
+The Phase 1 work guide (tasks, parts A to C) is [`teams/team-vehicle.md`](../../teams/team-vehicle.md).
 
 ## What you own
 
@@ -11,6 +12,8 @@ This page belongs to the team. Keep it up to date here instead of in the README.
 | `flycar/config/vehicle.py` | Scenario sections `vehicle`, `spawn`, `terrain`: defaults and checks |
 | `tests/test_vehicle.py` | Your tests |
 | `scenarios/team_vehicle.yaml` | Your scratch scenario |
+| `flycar/drivers/contrib/vehicle_driver.py` | Your capstone driver (observation only, no pychrono) |
+| `teams/team-vehicle.md` | Your Phase 1 work guide |
 | `docs/teams/vehicle.md` | This page |
 
 ## Contracts you must not break

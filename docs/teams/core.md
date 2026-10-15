@@ -1,6 +1,7 @@
 # Team: Core & body sensing (`core`)
 
 This page belongs to the team. Keep it up to date here instead of in the README.
+The Phase 1 work guide (tasks, parts A to C) is [`teams/team-core.md`](../../teams/team-core.md).
 
 ## What you own
 
@@ -12,6 +13,8 @@ This page belongs to the team. Keep it up to date here instead of in the README.
 | `flycar/config/core.py` | Scenario sections `episode`, `timing`, `contact`, `termination`: defaults and checks |
 | `tests/test_core.py` | Your tests |
 | `scenarios/team_core.yaml` | Your scratch scenario |
+| `flycar/drivers/contrib/core_driver.py` | Your capstone driver (observation only, no pychrono) |
+| `teams/team-core.md` | Your Phase 1 work guide |
 | `docs/teams/core.md` | This page |
 
 ## Contracts you must not break

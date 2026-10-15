@@ -1,16 +1,19 @@
 # Team: World (`world`)
 
 This page belongs to the team. Keep it up to date here instead of in the README.
+The Phase 1 work guide (tasks, parts A to C) is [`teams/team-world.md`](../../teams/team-world.md).
 
 ## What you own
 
 | Path | What it is |
 |---|---|
 | `flycar/env/world.py` | `sample_layout()` (rolls the dice) and `World` (walls, obstacles, lamps) |
-| `scenarios/` | Every scenario file **except** the frozen baselines `empty_arena.yaml` and `light_seek.yaml` |
+| `scenarios/` | Every scenario file **except** the frozen baselines `empty_arena.yaml` and `light_seek.yaml` and the other teams' `team_*.yaml` scratch files |
 | `flycar/config/world.py` | Scenario sections `arena`, `lighting`, `lights`, `obstacles`, `motion`: defaults and checks |
 | `tests/test_world.py` | Your tests |
 | `scenarios/team_world.yaml` | Your scratch scenario |
+| `flycar/drivers/contrib/world_driver.py` | Your capstone driver (observation only, no pychrono) |
+| `teams/team-world.md` | Your Phase 1 work guide |
 | `docs/teams/world.md` | This page |
 
 ## Contracts you must not break

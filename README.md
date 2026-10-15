@@ -202,7 +202,8 @@ update the tables in `docs/API.md` (a test will remind you).
 
 Five teams own the code, each with its own page in [`docs/teams/`](docs/teams/):
 what it owns, its config section, its tests and scratch scenario, and the
-contracts it must not break.
+contracts it must not break. The Phase 1 work guides (what each team builds)
+are in [`teams/`](teams/).
 
 | Team | Owns | Page |
 |---|---|---|

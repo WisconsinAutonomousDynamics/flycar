@@ -1,16 +1,18 @@
 # Team: Tools & drivers (`tools`)
 
 This page belongs to the team. Keep it up to date here instead of in the README.
+The Phase 1 work guide (tasks, parts A to C) is [`teams/team-tools.md`](../../teams/team-tools.md).
 
 ## What you own
 
 | Path | What it is |
 |---|---|
 | `flycar/tools/` | Logger, replay, dashboard, plotting helpers |
-| `flycar/drivers/` | The controllers and `make_driver()` (but see the frozen `Driver` protocol below) |
+| `flycar/drivers/` | The controllers and `make_driver()` (but see the frozen `Driver` protocol below). In `contrib/`, you own `__init__.py`; each `<slug>_driver.py` belongs to that team |
 | `run.py` | Runs a driver in a scenario |
 | `tests/test_tools.py` | Your tests (tools, drivers, `run.py`) |
 | `scenarios/team_tools.yaml` | Your scratch scenario |
+| `teams/team-tools.md` | Your Phase 1 work guide |
 | `docs/teams/tools.md` | This page |
 
 You have no section in `flycar/config/`: tools and drivers do not read

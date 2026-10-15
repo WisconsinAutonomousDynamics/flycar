@@ -1,8 +1,10 @@
 # Who reviews what. GitHub asks the owners of every changed file for a review.
 #
-# For each file, the LAST matching line wins. Frozen paths are therefore listed
-# last, so they override the team that owns the folder around them (for
-# example the two baseline scenarios inside scenarios/).
+# For each file, the LAST matching line wins. A specific file can therefore be
+# given to a different owner than the folder around it by listing it later:
+# each team's scratch scenario inside scenarios/ (world), each team's capstone
+# driver inside flycar/drivers/ (tools), and, last of all, the frozen paths
+# (for example the two baseline scenarios).
 #
 # Every file in the repository must be covered. Check with:
 #     python scripts/check_codeowners.py
@@ -16,6 +18,7 @@
 /flycar/config/vehicle.py           @WisconsinAutonomousDynamics/flycar-vehicle
 /tests/test_vehicle.py              @WisconsinAutonomousDynamics/flycar-vehicle
 /docs/teams/vehicle.md              @WisconsinAutonomousDynamics/flycar-vehicle
+/teams/team-vehicle.md              @WisconsinAutonomousDynamics/flycar-vehicle
 
 # ---- World -------------------------------------------------------------------
 /flycar/env/world.py                @WisconsinAutonomousDynamics/flycar-world
@@ -23,6 +26,7 @@
 /scenarios/                         @WisconsinAutonomousDynamics/flycar-world
 /tests/test_world.py                @WisconsinAutonomousDynamics/flycar-world
 /docs/teams/world.md                @WisconsinAutonomousDynamics/flycar-world
+/teams/team-world.md                @WisconsinAutonomousDynamics/flycar-world
 
 # ---- Vision ------------------------------------------------------------------
 /flycar/env/sensing/eyes.py         @WisconsinAutonomousDynamics/flycar-vision
@@ -30,6 +34,7 @@
 /flycar/config/vision.py            @WisconsinAutonomousDynamics/flycar-vision
 /tests/test_vision.py               @WisconsinAutonomousDynamics/flycar-vision
 /docs/teams/vision.md               @WisconsinAutonomousDynamics/flycar-vision
+/teams/team-vision.md               @WisconsinAutonomousDynamics/flycar-vision
 
 # ---- Core & body sensing -----------------------------------------------------
 /flycar/env/core.py                 @WisconsinAutonomousDynamics/flycar-core
@@ -38,6 +43,7 @@
 /flycar/config/core.py              @WisconsinAutonomousDynamics/flycar-core
 /tests/test_core.py                 @WisconsinAutonomousDynamics/flycar-core
 /docs/teams/core.md                 @WisconsinAutonomousDynamics/flycar-core
+/teams/team-core.md                 @WisconsinAutonomousDynamics/flycar-core
 
 # ---- Tools & drivers ---------------------------------------------------------
 /flycar/tools/                      @WisconsinAutonomousDynamics/flycar-tools
@@ -45,6 +51,21 @@
 /run.py                             @WisconsinAutonomousDynamics/flycar-tools
 /tests/test_tools.py                @WisconsinAutonomousDynamics/flycar-tools
 /docs/teams/tools.md                @WisconsinAutonomousDynamics/flycar-tools
+/teams/team-tools.md                @WisconsinAutonomousDynamics/flycar-tools
+
+# ---- Team files inside another team's folder ---------------------------------
+# These come after the team blocks above, so they win over /scenarios/ (world)
+# and /flycar/drivers/ (tools) for these specific files. The capstone drivers
+# do not exist yet; check_codeowners.py lists them as reserved.
+/scenarios/team_vehicle.yaml        @WisconsinAutonomousDynamics/flycar-vehicle
+/scenarios/team_world.yaml          @WisconsinAutonomousDynamics/flycar-world
+/scenarios/team_vision.yaml         @WisconsinAutonomousDynamics/flycar-vision
+/scenarios/team_core.yaml           @WisconsinAutonomousDynamics/flycar-core
+/scenarios/team_tools.yaml          @WisconsinAutonomousDynamics/flycar-tools
+/flycar/drivers/contrib/vehicle_driver.py @WisconsinAutonomousDynamics/flycar-vehicle
+/flycar/drivers/contrib/world_driver.py @WisconsinAutonomousDynamics/flycar-world
+/flycar/drivers/contrib/vision_driver.py @WisconsinAutonomousDynamics/flycar-vision
+/flycar/drivers/contrib/core_driver.py @WisconsinAutonomousDynamics/flycar-core
 
 # ---- Shared files no team owns (project leads) -------------------------------
 /README.md                          @WisconsinAutonomousDynamics/flycar-leads

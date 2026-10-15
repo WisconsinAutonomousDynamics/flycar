@@ -159,7 +159,7 @@ def test_braitenberg_reaches_the_light_in_most_seeds():
 DRIVER_DIR = REPO_ROOT / "flycar" / "drivers"
 
 
-DRIVER_FILES = sorted(DRIVER_DIR.glob("*.py"))
+DRIVER_FILES = sorted(DRIVER_DIR.rglob("*.py"))   # includes the teams' drivers in contrib/
 
 
 ALLOWED_FLYCAR_IMPORTS = ("flycar.drivers", "flycar.env.spaces")
@@ -177,7 +177,7 @@ def _imported_modules(path):
     return names
 
 
-@pytest.mark.parametrize("path", DRIVER_FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", DRIVER_FILES, ids=lambda p: str(p.relative_to(DRIVER_DIR)))
 def test_drivers_do_not_import_pychrono(path):
     """Static check: read the source, look at the import statements."""
     for name in _imported_modules(path):
