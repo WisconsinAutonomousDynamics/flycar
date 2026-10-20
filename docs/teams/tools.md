@@ -36,9 +36,51 @@ Changing these needs a lead-approved `api-change` issue (see
   `EpisodeLogger(..., log_extras=True)`) is used, so logs stay small.
 - `run.py` is the reference loop shown in the README; keep it short.
 
+## Batch runner (`flycar/tools/batch.py`)
+
+Runs many seeds of one or more scenarios with one or more drivers, optionally
+in parallel, and scores them.
+
+
+| Option | Meaning |
+|---|---|
+| `--scenario` | One scenario YAML, or several separated by commas |
+| `--driver` | One driver name, or several separated by commas (default: `braitenberg`) |
+| `--seeds` | `0-49` (both ends included), `7`, or a mix such as `0-9,20` (default: `0-9`) |
+| `--workers` | Number of processes (default: 1) |
+| `--out DIR` | Write the episode table to `DIR/results.csv` (nothing is written if omitted) |
+
+The terminal shows one line per (scenario, driver): successes out of episodes,
+the success rate with a 95 % Wilson confidence interval, and the median time to
+target over the successful episodes. With several drivers or scenarios it also
+prints a table of success rates (rows: drivers, columns: scenarios). A
+scenario without a target lamp has no success rate, so it is reported as "not
+applicable" and shows as `NaN` in that table.
+
+`results.csv` has one row per episode:
+
+| Column | Meaning |
+|---|---|
+| `scenario`, `driver`, `seed` | Which episode this is |
+| `success` | True if the car reached the target lamp |
+| `time_to_target` | Simulation time at success [s]; empty (NaN) if it never got there |
+| `target_distance` | Distance to the target at the end [m]; empty if there is no target |
+| `contact_steps` | Control steps in which any contact flag was set |
+| `path_length` | Distance driven [m], summed over the poses of the episode |
+| `duration_s` | Simulation time at the end of the episode [s] |
+| `termination_reason` | `success`, `timeout` or `stopped` (from `terminated` / `truncated`, so it works without `info["extras"]`) |
+
+Every episode builds its own environment and driver, so an episode depends only
+on its scenario, driver and seed. The workers are separate processes started
+with `spawn` (Chrono objects cannot be shared), and the rows come back in job
+order, so the table is the same with 1 worker or 8. The eyes use the `raycast`
+backend. 
+
+
 ## Running your tests
 
 ```
 pytest tests/test_tools.py
 python run.py --scenario scenarios/team_tools.yaml --driver braitenberg --dashboard
 ```
+
