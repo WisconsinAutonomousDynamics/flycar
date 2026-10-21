@@ -47,3 +47,47 @@ jobs:
 
       - name: Run the tests
         run: pytest
+
+  # The same suite on Windows and macOS (Apple silicon), where most of the team
+  # works. The full baseline episodes skip themselves there (they only
+  # reproduce on Linux); the setup and maneuver checks run everywhere.
+  pytest-other-os:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      FLYCAR_EYE_BACKEND: raycast
+      MPLBACKEND: Agg
+      CACHE_NUMBER: 0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: flycar
+
+      - name: Restore the cached conda environment
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CONDA }}/envs
+          key: conda-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
+
+      - name: Create the conda environment from environment.yml
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: conda env update -n flycar -f environment.yml
+
+      - name: Check the installation
+        run: python scripts/check_env.py
+
+      - name: Run the tests
+        run: pytest
