@@ -223,8 +223,14 @@ def chrono_setup(scenario_path, seed=0):
 
     bodies = []
     for body in system.GetBodies():
+        tag = body.GetTag()
+        # Chrono::Vehicle tags its parts (vehicle_id << 16) | part_id, and
+        # vehicle_id counts every vehicle built so far in this process (so it
+        # depends on which tests ran first). Keep only the part.
+        if tag >= 0:
+            tag &= 0xFFFF
         entry = {
-            "tag": body.GetTag(),
+            "tag": tag,
             "fixed": body.IsFixed(),
             "mass": body.GetMass(),
             "inertia_xx": _vector(body.GetInertiaXX()),

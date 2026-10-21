@@ -928,7 +928,7 @@
       ],
       "mass": 2.0,
       "name": "Steering_link",
-      "tag": 126466
+      "tag": 60930
      },
      {
       "collision": false,
@@ -940,7 +940,7 @@
       ],
       "mass": 23.3,
       "name": "FrontSusp_spindle_L",
-      "tag": 126468
+      "tag": 60932
      },
      {
       "collision": false,
@@ -952,7 +952,7 @@
       ],
       "mass": 23.3,
       "name": "FrontSusp_spindle_R",
-      "tag": 126468
+      "tag": 60932
      },
      {
       "collision": false,
@@ -964,7 +964,7 @@
       ],
       "mass": 1.5,
       "name": "FrontSusp_upright_L",
-      "tag": 126465
+      "tag": 60929
      },
      {
       "collision": false,
@@ -976,7 +976,7 @@
       ],
       "mass": 4.0,
       "name": "FrontSusp_arm_L",
-      "tag": 126465
+      "tag": 60929
      },
      {
       "collision": false,
@@ -988,7 +988,7 @@
       ],
       "mass": 1.5,
       "name": "FrontSusp_upright_R",
-      "tag": 126465
+      "tag": 60929
      },
      {
       "collision": false,
@@ -1000,7 +1000,7 @@
       ],
       "mass": 4.0,
       "name": "FrontSusp_arm_R",
-      "tag": 126465
+      "tag": 60929
      },
      {
       "collision": false,
@@ -1012,7 +1012,7 @@
       ],
       "mass": 23.3,
       "name": "RearSusp_spindle_L",
-      "tag": 126468
+      "tag": 60932
      },
      {
       "collision": false,
@@ -1024,7 +1024,7 @@
       ],
       "mass": 23.3,
       "name": "RearSusp_spindle_R",
-      "tag": 126468
+      "tag": 60932
      },
      {
       "collision": true,
