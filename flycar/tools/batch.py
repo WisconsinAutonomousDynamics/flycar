@@ -283,6 +283,7 @@ def main():
   parser.add_argument("--workers", type=int, default=1, help="Number of parallel workers (default: 1)")
   # Optional folder for results.csv. Nothing is written without it.
   parser.add_argument("--out", help="Directory to write results")
+  parser.add_argument("--print", help="Print the results table to stdout", action="store_true")
 
   # Read the command line.
   args = parser.parse_args()
@@ -307,7 +308,12 @@ def main():
   summary = summarize(table)
   # One printed line per row.
   print_summary(summary)
-  
+
+  # Print the results table to stdout if --print is specified.
+  if args.print:
+    print("\nResults table:")
+    print(table.to_string(float_format=lambda v: f"{v:.2f}"))
+
   print()
 
   # With several drivers or scenarios, also show the success-rate grid.

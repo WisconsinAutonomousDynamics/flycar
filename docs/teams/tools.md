@@ -49,6 +49,7 @@ in parallel, and scores them.
 | `--seeds` | `0-49` (both ends included), `7`, or a mix such as `0-9,20` (default: `0-9`) |
 | `--workers` | Number of processes (default: 1) |
 | `--out DIR` | Write the episode table to `DIR/results.csv` (nothing is written if omitted) |
+| `--print` | Prints the table to stdout |
 
 The terminal shows one line per (scenario, driver): successes out of episodes,
 the success rate with a 95 % Wilson confidence interval, and the median time to
