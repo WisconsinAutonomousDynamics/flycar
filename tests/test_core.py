@@ -175,12 +175,16 @@ def test_no_target_gives_nan_distance(make_env):
 def test_extras_collects_extra_info_by_team(make_env):
     env = make_env(small_scenario())
     _, info = env.reset(seed=0)
-    assert info["extras"] == {}               # nothing provides extra_info() yet
+    assert info["extras"] == {"vision": {"eyes": env.eyes.extra_info()}}
 
     env.contact.extra_info = lambda: {"touches": 0}
     env.terrain.extra_info = lambda: {"patch": "flat"}
     _, _, _, _, info = env.step([0.0, 0.0, 0.0])
-    assert info["extras"] == {"core": {"contact": {"touches": 0}}, "vehicle": {"terrain": {"patch": "flat"}}}
+    assert info["extras"] == {
+        "core": {"contact": {"touches": 0}},
+        "vehicle": {"terrain": {"patch": "flat"}},
+        "vision": {"eyes": env.eyes.extra_info()},
+    }
 
 
 @pytest.mark.parametrize("settings, key", [

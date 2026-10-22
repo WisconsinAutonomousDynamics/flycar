@@ -1,0 +1,88 @@
+eyes_benchmark:
+  scenario: scenarios/light_seek.yaml
+  backend: raycast
+  resolution: [20, 20]
+  seed: 0
+  measurement: Single render during reset; no warm-up.
+  metrics:
+    render_ms: 1.390625024214387
+    primary_ms: 0.8007502183318138
+    shadow_ms: 0.3670002333819866
+    lamp_glow_ms: 0.04545808769762516
+    primary_rays: 800
+    shadow_rays: 373
+    lamp_glow_rays: 2
+    rays_cast: 1175
+  repeated_baseline:
+    measurement: Repeated renders at each seed's reset pose with no physics steps.
+    warmup_renders: 20
+    measured_renders: 200
+    environment:
+      python: 3.12.15
+      platform: macOS-26.5.1-arm64-arm-64bit
+      machine: arm64
+      chrono: 10.0.0
+    results:
+    - seed: 0
+      metrics:
+        render_ms:
+          median: 1.1087498860433698
+          p95: 1.2632732279598713
+        primary_ms:
+          median: 0.7060200441628695
+          p95: 0.8022205438464878
+        shadow_ms:
+          median: 0.3038964932784438
+          p95: 0.35770359681919217
+        lamp_glow_ms:
+          median: 0.021999934688210487
+          p95: 0.035804393701255315
+        primary_rays: 800
+        shadow_rays: 373
+        lamp_glow_rays: 2
+        rays_cast: 1175
+        wall_ms:
+          median: 1.1092704953625798
+          p95: 1.2651190161705017
+    - seed: 1
+      metrics:
+        render_ms:
+          median: 1.2472920352593064
+          p95: 1.5027330955490459
+        primary_ms:
+          median: 0.6919169100001454
+          p95: 0.7920852396637199
+        shadow_ms:
+          median: 0.4653334617614746
+          p95: 0.5339310970157385
+        lamp_glow_ms:
+          median: 0.021604937501251698
+          p95: 0.0404701218940317
+        primary_rays: 800
+        shadow_rays: 418
+        lamp_glow_rays: 2
+        rays_cast: 1220
+        wall_ms:
+          median: 1.2478544376790524
+          p95: 1.5045399544760574
+    - seed: 2
+      metrics:
+        render_ms:
+          median: 1.168145565316081
+          p95: 1.2863063137046993
+        primary_ms:
+          median: 0.6664999527856708
+          p95: 0.7193563855253159
+        shadow_ms:
+          median: 0.41297904681414366
+          p95: 0.4591624718159437
+        lamp_glow_ms:
+          median: 0.021062674932181835
+          p95: 0.029873533640056835
+        primary_rays: 800
+        shadow_rays: 417
+        lamp_glow_rays: 2
+        rays_cast: 1219
+        wall_ms:
+          median: 1.1688328813761473
+          p95: 1.287215854972601
