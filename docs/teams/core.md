@@ -59,3 +59,24 @@ Any other value is rejected with "not implemented yet" until you implement it.
 pytest tests/test_core.py tests/test_baseline.py
 python run.py --scenario scenarios/team_core.yaml --driver braitenberg --dashboard
 ```
+
+
+## A1 — Core Profiling
+
+A1 implements optional wall-clock profiling of FlyCar's core environment.
+
+- Configuration: `timing.profile`, disabled by default.
+- Output: `info["extras"]["core"]["env"]`.
+- Measures physics, synchronization, advancement, vision, contact,
+  IMU, observation, and info generation.
+- Preserves the existing physics execution order and default behavior.
+- Resets profiling measurements between episodes.
+
+The 10-episode, 20×20 CPU raycast benchmark recorded an overall
+real-time factor of 0.689×.
+
+Full validation: 100 passed, 4 skipped.
+Baseline validation: 2 passed, 4 skipped.
+
+See `docs/A1_PROFILING.md` for the complete methodology and results.
+
