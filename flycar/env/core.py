@@ -33,6 +33,7 @@ physics steps (10 by default).
 """
 
 import math
+import time
 
 import gymnasium
 import numpy as np
@@ -64,6 +65,7 @@ EXTRA_INFO_SOURCES = (
     ("eyes", "vision"),
     ("imu", "core"),
     ("contact", "core"),
+    ("env", "core"),
 )
 
 
@@ -97,6 +99,12 @@ class FlyCarEnv(gymnasium.Env):
         timing = self.scenario["timing"]
         self.control_period = float(timing["control_period_s"])
         self.physics_step = float(timing["physics_step_s"])
+        self._profile_enabled = timing.get("profile", False)
+        self._profile_times = {}
+        self._profile_calls = {}
+        self._profile_overhead_s = 0.0
+        self._profile_wall_s = 0.0
+        self._profile_steps = 0
         self.substeps = int(round(self.control_period / self.physics_step))
         self.eye_every = int(round(self.scenario["eyes"]["update_period_s"] / self.control_period))
         self.render_every = max(1, int(round(RENDER_PERIOD_S / self.control_period)))
@@ -177,6 +185,8 @@ class FlyCarEnv(gymnasium.Env):
         for _ in range(int(round(SETTLE_TIME_S / self.physics_step))):
             self._physics_step()
         self.vehicle.release_controls()
+        self._reset_profiler()
+
 
         # 5) Start the episode clock.
         self.step_count = 0
@@ -187,6 +197,7 @@ class FlyCarEnv(gymnasium.Env):
         observation = self._observation()
         info = self._info()
         info["world"] = self.layout
+        self._reset_profiler()
         return observation, info
 
     def step(self, action):
@@ -201,6 +212,8 @@ class FlyCarEnv(gymnasium.Env):
         if self.system is None:
             raise RuntimeError("Call reset() before step().")
 
+        wall_start = time.perf_counter() if self._profile_enabled else None
+
         # The action is held constant for the whole control period.
         self.vehicle.set_action(action, self.control_period)
         self.contact.clear()
@@ -213,10 +226,12 @@ class FlyCarEnv(gymnasium.Env):
         # The eyes take a new picture every few control steps. In between,
         # the observation repeats the last picture (like a real camera).
         if self.step_count % self.eye_every == 0:
-            self._eye_left, self._eye_right = self.eyes.render()
+            self._eye_left, self._eye_right = self._measure("eyes_render", self.eyes.render)
 
-        observation = self._observation()
-        info = self._info()
+        observation = self._measure("observation", self._observation)
+        if self._profile_enabled:
+            self._profile_steps += 1
+        info = self._measure("info", self._info)
 
         terminated = bool(info["success"])
         out_of_time = info["time"] >= self.scenario["episode"]["max_time_s"] - 1e-9
@@ -224,6 +239,12 @@ class FlyCarEnv(gymnasium.Env):
 
         if self.render_mode == "human" and self.step_count % self.render_every == 0:
             self.render()
+
+        if self._profile_enabled:
+            self._profile_wall_s += time.perf_counter() - wall_start
+            # The info snapshot was built before this step's info timing and
+            # wall-clock total were recorded. Update only the profiler snapshot.
+            info["extras"]["core"]["env"] = self.extra_info()
 
         return observation, 0.0, terminated, truncated, info
 
@@ -252,6 +273,44 @@ class FlyCarEnv(gymnasium.Env):
     # ------------------------------------------------------------------------
     # The physics loop
     # ------------------------------------------------------------------------
+    def _reset_profiler(self):
+        """Clear measurements at the beginning of an episode."""
+        self._profile_times = {}
+        self._profile_calls = {}
+        self._profile_overhead_s = 0.0
+        self._profile_wall_s = 0.0
+        self._profile_steps = 0
+
+    def _measure(self, name, operation):
+        """Measure one operation without changing its return value."""
+        if not self._profile_enabled:
+            return operation()
+
+        start = time.perf_counter()
+        try:
+            return operation()
+        finally:
+            elapsed = time.perf_counter() - start
+            self._profile_times[name] = (
+                self._profile_times.get(name, 0.0) + elapsed
+            )
+            self._profile_calls[name] = (
+                self._profile_calls.get(name, 0) + 1
+            )
+
+    def extra_info(self):
+        """Expose a snapshot of profiling measurements."""
+        if not self._profile_enabled:
+            return {}
+
+        return {
+            "timings_s": dict(self._profile_times),
+            "calls": dict(self._profile_calls),
+            "wall_s": self._profile_wall_s,
+            "control_steps": self._profile_steps,
+            "simulated_s": self._profile_steps * self.control_period,
+        }
+
 
     def _make_system(self):
         """Create an empty Chrono system set up the way vehicles need it."""
@@ -272,32 +331,57 @@ class FlyCarEnv(gymnasium.Env):
 
     def _physics_step(self):
         """Advance everything by one physics step."""
-        time = self.system.GetChTime()
+        sim_time = self.system.GetChTime()
         step = self.physics_step
 
-        # Phase 1, "Synchronize": every subsystem reads the current time and
-        # its inputs (the car reads the driver inputs and the terrain).
-        # This order is a frozen contract (docs/CONTRACTS.md).
-        self.terrain.synchronize(time)
-        self.world.synchronize(time)
-        self.vehicle.synchronize(time, self.terrain.chrono_terrain)
+        self._measure(
+            "terrain_sync",
+            lambda: self.terrain.synchronize(sim_time),
+        )
+        self._measure(
+            "world_sync",
+            lambda: self.world.synchronize(sim_time),
+        )
+        self._measure(
+            "vehicle_sync",
+            lambda: self.vehicle.synchronize(
+                sim_time, self.terrain.chrono_terrain
+            ),
+        )
+
         if self.window is not None:
-            self.window.Synchronize(time, self.vehicle.inputs)
+            self._measure(
+                "window_sync",
+                lambda: self.window.Synchronize(
+                    sim_time, self.vehicle.inputs
+                ),
+            )
 
-        # Phase 2, "Advance": every subsystem moves forward in time.
-        self.terrain.advance(step)
-        self.world.advance(step)
-        self.vehicle.advance(step)
+        self._measure(
+            "terrain_advance",
+            lambda: self.terrain.advance(step),
+        )
+        self._measure(
+            "world_advance",
+            lambda: self.world.advance(step),
+        )
+        self._measure(
+            "vehicle_advance",
+            lambda: self.vehicle.advance(step),
+        )
+
         if self.window is not None:
-            self.window.Advance(step)
+            self._measure(
+                "window_advance",
+                lambda: self.window.Advance(step),
+            )
 
-        # We created the ChSystem ourselves, so we are the ones who step it.
-        # (A vehicle only steps the system when it created that system itself.)
-        self.system.DoStepDynamics(step)
-
-        # Sensors that need to look at every physics step.
-        self.eyes.update()
-        self.contact.poll()
+        self._measure(
+            "physics",
+            lambda: self.system.DoStepDynamics(step),
+        )
+        self._measure("eyes_update", self.eyes.update)
+        self._measure("contact_poll", self.contact.poll)
 
     # ------------------------------------------------------------------------
     # Observation and info
@@ -312,8 +396,8 @@ class FlyCarEnv(gymnasium.Env):
         return {
             "eye_left": self._eye_left,
             "eye_right": self._eye_right,
-            "imu": self.imu.read(self.control_period),
-            "contact": self.contact.read(),
+            "imu": self._measure("imu_read", lambda: self.imu.read(self.control_period)),
+            "contact": self._measure("contact_read", self.contact.read),
             "time": np.array([self._time()], dtype=np.float32),
         }
 
@@ -352,17 +436,20 @@ class FlyCarEnv(gymnasium.Env):
         }
 
     def _extras(self):
-        """Collect the optional debug data of every component, keyed by team.
-
-        A component takes part by defining ``extra_info()`` returning a dict.
-        Components without that method are skipped.
-        """
+        """Collect optional debug data from components."""
         extras = {}
+
         for component, team in EXTRA_INFO_SOURCES:
-            extra_info = getattr(getattr(self, component), "extra_info", None)
+            if component == "env" and not self._profile_enabled:
+                continue
+
+            source = self if component == "env" else getattr(self, component)
+            extra_info = getattr(source, "extra_info", None)
             if extra_info is None:
                 continue
+
             extras.setdefault(team, {})[component] = extra_info()
+
         return extras
 
     # ------------------------------------------------------------------------

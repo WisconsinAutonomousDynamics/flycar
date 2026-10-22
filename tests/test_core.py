@@ -195,3 +195,77 @@ def test_contact_modes_and_extra_terminations_are_not_implemented_yet(settings, 
     assert scenario["termination"] == {"flipped": False, "stuck_s": None, "left_arena": False}
     with pytest.raises(ScenarioError, match=key.replace(".", r"\.") + ".*not implemented yet"):
         load_scenario(settings)
+
+def test_profiling_accumulates_and_resets(make_env):
+    env = make_env(small_scenario(timing={"profile": True}))
+
+    env.reset(seed=0)
+    for _ in range(3):
+        _, _, _, _, info = env.step([0.0, 0.0, 0.0])
+
+    profile = info["extras"]["core"]["env"]
+
+    assert profile["calls"]["physics"] == 3 * env.substeps
+    assert profile["calls"]["observation"] == 3
+    assert profile["timings_s"]["physics"] >= 0.0
+
+    _, info = env.reset(seed=1)
+    profile = info["extras"]["core"]["env"]
+
+    assert profile["calls"].get("physics", 0) == 0
+
+
+def test_profiling_does_not_change_simulation():
+    """Profiling must not change simulation outputs."""
+    import numpy as np
+
+    from flycar.env.core import FlyCarEnv
+
+    actions = [[0.3, 0.0, 0.0]] * 20
+    results = []
+
+    for enabled in (False, True):
+        env = FlyCarEnv(
+            "scenarios/light_seek.yaml",
+            eye_backend="raycast",
+        )
+        env._profile_enabled = enabled
+
+        try:
+            env.reset(seed=42)
+            trajectory = []
+
+            for action in actions:
+                obs, reward, terminated, truncated, info = env.step(action)
+
+                trajectory.append(
+                    (
+                        np.asarray(info["pose"], dtype=float).copy(),
+                        float(reward),
+                        bool(terminated),
+                        bool(truncated),
+                        np.asarray(obs["imu"]).copy(),
+                    )
+                )
+
+                if terminated or truncated:
+                    break
+
+            results.append(trajectory)
+
+        finally:
+            env.close()
+
+    assert len(results[0]) == len(results[1])
+
+    for original, profiled in zip(*results):
+        np.testing.assert_allclose(
+            original[0], profiled[0], rtol=1e-7, atol=1e-9
+        )
+        np.testing.assert_allclose(
+            original[1], profiled[1], rtol=1e-7, atol=1e-9
+        )
+        assert original[2:4] == profiled[2:4]
+        np.testing.assert_allclose(
+            original[4], profiled[4], rtol=1e-7, atol=1e-9
+        )
