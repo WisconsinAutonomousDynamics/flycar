@@ -15,9 +15,9 @@
   // "optional" means: add `--gpus all` when the host has a usable NVIDIA GPU,
   // and start normally (CPU only) when it does not. With a GPU the `sensor`
   // eye backend can work; without one the env falls back to `raycast`.
-  "hostRequirements": {
+  /*"hostRequirements": {
     "gpu": "optional"
-  },
+  },*/
 
   "remoteUser": "vscode",
 

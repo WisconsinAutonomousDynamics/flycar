@@ -20,6 +20,9 @@ called blitting, and it is roughly ten times faster.
 
 from collections import deque
 
+import matplotlib
+matplotlib.use('TkAgg')
+
 import matplotlib.pyplot as plt
 import numpy as np
 
