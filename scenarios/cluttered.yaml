@@ -1,0 +1,60 @@
+# Scenario is many small obstacles between spawn and lamp.
+# Tests obstacle handling.
+
+name: cluttered
+description: many small obstacles between spawn and lamp.
+
+episode:
+  max_time_s: 25.0
+  success_radius_m: 1.0
+
+arena:
+  size_m: [50.0, 60.0]
+  walls: true
+
+spawn:
+  x: [-30.0, 30.0]
+  y: [-30.0, -25.0]
+  yaw_deg: [20.0, 160.0]
+  min_target_distance_m: 35.0
+
+lighting:
+  ambient: 0.25    # ambient lighting so walls are visible
+  sky: 0.25
+
+lights:
+  - x: [-10.0, 10.0]
+    y: [20.0, 25.0]
+    z: 1.5
+    intensity: 2.0
+    falloff_m: 12.0
+    target: true
+
+obstacles:
+  - shape: box
+    size_m: [1, 1, 1.5]      # length, width, height
+    x: [0.0, 23.0]
+    y: [0.0, 27.0]
+    yaw_deg: [0.0, 90.0]
+    count: 12
+
+  - shape: box
+    size_m: [1, 1, 1.5]      # length, width, height
+    x: [-23.0, 0.0]
+    y: [-23.0, 0.0]
+    yaw_deg: [0.0, 90.0]
+    count: 12
+  
+  - shape: box
+    size_m: [1, 1, 1.5]      # length, width, height
+    x: [0.0, 23.0]
+    y: [-23.0, 0.0]
+    yaw_deg: [0.0, 90.0]
+    count: 12
+
+  - shape: box
+    size_m: [1, 1, 1.5]     # length, width, height
+    x: [-23.0, 0.0]
+    y: [0.0, 27.0]
+    yaw_deg: [0.0, 90.0]
+    count: 12

@@ -1,0 +1,31 @@
+# Scenario is a weak lamp with short falloff in a bright arena.
+# Tests sensitivity.
+
+name: dim_lamp
+description: a weak lamp with short falloff in a bright arena.
+
+episode:
+  max_time_s: 30.0
+  success_radius_m: 1.0
+
+arena:
+  size_m: [80.0, 80.0]
+  walls: true
+
+spawn:
+  x: [-30.0, 30.0]
+  y: [-30.0, 30.0]
+  yaw_deg: [-180.0, 180.0]
+  min_target_distance_m: 40 .0
+
+lighting:
+  ambient: 0.08                 # night: surfaces are barely visible without the lamp
+  sky: 0.04                     # as dark as unlit ground, so only the lamp stands out
+
+lights:
+  - x: [-30.0, 30.0]
+    y: [-30.0, 30.0]
+    z: 1.5
+    intensity: 0.2
+    falloff_m: 0.5
+    target: true

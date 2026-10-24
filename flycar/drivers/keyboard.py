@@ -37,13 +37,11 @@ class KeyboardDriver:
 
     def on_key_press(self, key):
         """Called by the window when a key goes down. ``key`` is a name like 'w' or 'left'."""
-        print(f"PRESS: {key} (Type: {type(key)})")
         if key:
             self.keys_down.add(key.lower())
 
     def on_key_release(self, key):
         """Called by the window when a key comes back up."""
-        print(f"RELEASE: {key} (Type: {type(key)})")
         if key:
             self.keys_down.discard(key.lower())
 

@@ -1,0 +1,39 @@
+# Scenario is a lamp that starts hidden behind a large obstacle.
+# Tests what a driver does when it sees nothing.
+
+name: occluded_lamp
+description: the lamp that starts hidden behind a large obstacle.
+
+episode:
+  max_time_s: 25.0
+  success_radius_m: 1.0
+
+arena:
+  size_m: [50.0, 70.0]
+  walls: true
+
+spawn:
+  x: [-10.0, 10.0]
+  y: [-35.0, -20.0]
+  yaw_deg: [90.0, 90.0]
+  min_target_distance_m: 30.0
+
+lighting:
+  ambient: 0.08                 # so the driver cannot see anything
+  sky: 0.04
+
+lights:
+  - x: [-10.0, 10.0]
+    y: [20.0, 35.0]
+    z: 1.5
+    intensity: 1.0
+    falloff_m: 6.0
+    target: true
+
+obstacles:
+  - shape: box
+    size_m: [40.0, 5.0, 1.5]     # length, width, height
+    x: [-5.0, 5.0]
+    y: [-5.0, 5.0]
+    yaw_deg: [-5.0, 5.0]
+    count: 1

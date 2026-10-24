@@ -1,0 +1,37 @@
+# Scenario is one target lamp and one bright non-target lamp ("distractor").
+# Tests whether a driver can be fooled.
+
+name: two_lamps
+description: one target lamp and one bright non-target lamp ("distractor").
+
+episode:
+  max_time_s: 25.0
+  success_radius_m: 1.0
+
+arena:
+  size_m: [80.0, 80.0]
+  walls: true
+
+spawn:
+  x: [-30.0, 30.0]
+  y: [-30.0, 30.0]
+  yaw_deg: [-180.0, 180.0]
+  min_target_distance_m: 25.0
+
+lighting:
+  ambient: 0.08                 # night: surfaces are barely visible without the lamp
+  sky: 0.04                     # as dark as unlit ground, so only the lamp stands out
+
+lights:
+  - x: [-30.0, 30.0]
+    y: [-30.0, 30.0]
+    z: 1.5
+    intensity: 1.0
+    falloff_m: 6.0
+    target: true
+  - x: [-20.0, 20.0]
+    y: [-20.0, 20.0]
+    z: 1.5
+    intensity: 10.0
+    falloff_m: 6.0
+    target: false

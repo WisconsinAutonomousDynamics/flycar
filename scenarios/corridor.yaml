@@ -1,0 +1,74 @@
+# Scenario is a long, narrow walled corridor with the lamp at the end.
+# Tests going straight without hitting walls.
+# As this scenario tests the driver's ability to not hit walls,
+# there are small road blocks on the walls that will stop the driver if they are hugging the wall.
+
+name: corridor
+description: A long, narrow walled corridor with the lamp at the end.
+
+episode:
+  max_time_s: 30.0
+  success_radius_m: 2.5
+
+arena:
+  size_m: [90.0, 10.0]
+  walls: true
+
+spawn:
+  x: [-40.0, -40.0]
+  y: [0.0, 0.0]
+  yaw_deg: [-30.0, 30.0]
+  min_target_distance_m: 20.0
+
+lighting:
+  ambient: 0.5    # ambient lighting so walls are visible
+  sky: 0.5
+ 
+lights:
+  - x: [40.0, 40.0]
+    y: [-1.0, 1.0]
+    z: 1.5
+    intensity: 10.0
+    falloff_m: 0.5
+    target: true
+
+# traps to prevent vehicle that is hugging the wall from moving forward
+obstacles:
+  - shape: box
+    size_m: [1, 1, 1.5]     # length, width, height
+    x: [-30.0, -20.0]
+    y: [5.0, 5.0]
+    yaw_deg: [0.0, 0.0]
+    count: 1
+  - shape: box
+    size_m: [1, 1, 1.5]     # length, width, height
+    x: [-30.0, -20.0]
+    y: [-5.0, -5.0]
+    yaw_deg: [0.0, 0.0]
+    count: 1
+  
+  - shape: box
+    size_m: [1, 1, 1.5]     # length, width, height
+    x: [-10.0, 10.0]
+    y: [5.0, 5.0]
+    yaw_deg: [0.0, 0.0]
+    count: 1
+  - shape: box
+    size_m: [1, 1, 1.5]     # length, width, height
+    x: [-10.0, 10.0]
+    y: [-5.0, -5.0]
+    yaw_deg: [0.0, 0.0]
+    count: 1
+  
+  - shape: box
+    size_m: [1, 1, 1.5]     # length, width, height
+    x: [20.0, 30.0]
+    y: [5.0, 5.0]
+    yaw_deg: [0.0, 0.0]
+    count: 1
+  - shape: box
+    size_m: [1, 1, 1.5]     # length, width, height
+    x: [20.0, 30.0]
+    y: [-5.0, -5.0]
+    yaw_deg: [0.0, 0.0]
+    count: 1
