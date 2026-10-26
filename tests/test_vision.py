@@ -1,9 +1,206 @@
 """Vision team: the compound eyes."""
 
+import math
+
+import numpy as np
 import pytest
 
 from conftest import small_scenario
 from flycar.env.scenario import ScenarioError, load_scenario
+
+
+def test_eye_benchmark_excludes_warmup_and_closes_each_seed(monkeypatch):
+    from scripts import benchmark_eyes
+
+    created = []
+
+    class FakeEnv:
+        def __init__(self, scenario, eye_backend):
+            assert scenario.name == "light_seek.yaml"
+            assert eye_backend == "raycast"
+            self.eyes = self
+            self.rows = self.cols = 20
+            self.renders = 0
+            self.closed = False
+            created.append(self)
+
+        def reset(self, seed):
+            self.seed = seed
+            self.render()
+
+        def render(self):
+            self.renders += 1
+
+        def extra_info(self):
+            return {"render_ms": float(self.renders), "primary_rays": 800}
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(benchmark_eyes, "FlyCarEnv", FakeEnv)
+    report = benchmark_eyes.main()["eyes_benchmark"]
+    assert report["warmup_renders"] == 20
+    assert report["measured_renders"] == 200
+    assert [env.seed for env in created] == [0, 1, 2]
+    assert all(env.closed and env.renders == 221 for env in created)
+    for result in report["results"]:
+        assert result["metrics"]["render_ms"]["median"] == pytest.approx(121.5)
+        assert result["metrics"]["render_ms"]["p95"] == pytest.approx(211.05)
+        assert result["metrics"]["wall_ms"]["median"] >= 0.0
+        assert result["metrics"]["primary_rays"] == 800
+
+
+def test_eye_benchmark_closes_environment_on_failure(monkeypatch):
+    from scripts import benchmark_eyes
+
+    class FakeEnv:
+        rows = cols = 20
+        closed = False
+
+        def reset(self, seed):
+            pass
+
+        def render(self):
+            raise RuntimeError("render failed")
+
+        def close(self):
+            self.closed = True
+
+    env = FakeEnv()
+    env.eyes = env
+    monkeypatch.setattr(benchmark_eyes, "FlyCarEnv", lambda *args, **kwargs: env)
+    with pytest.raises(RuntimeError, match="render failed"):
+        benchmark_eyes.main()
+    assert env.closed
+
+
+@pytest.mark.parametrize("shadows", [False, True])
+def test_raycast_render_metrics(make_env, monkeypatch, shadows):
+    env = make_env(small_scenario(
+        eyes={"resolution": [20, 20], "shadows": shadows},
+        lights=[{"x": 5.0, "y": 6.0, "z": 1.5, "target": True}],
+    ))
+    observation, info = env.reset(seed=0)
+    reported = info["extras"]["vision"]["eyes"]
+    assert reported == env.eyes.extra_info()
+
+    secondary_calls = []
+    ray_hits_something = env.eyes._ray_hits_something
+
+    def count_secondary(start, end):
+        secondary_calls.append(1)
+        return ray_hits_something(start, end)
+
+    monkeypatch.setattr(env.eyes, "_ray_hits_something", count_secondary)
+    left, right = env.eyes.render()
+    metrics = env.eyes.extra_info()
+
+    for key in ("render_ms", "primary_ms", "shadow_ms", "lamp_glow_ms"):
+        assert math.isfinite(metrics[key]) and metrics[key] >= 0.0
+    assert metrics["render_ms"] >= sum(
+        metrics[key] for key in ("primary_ms", "shadow_ms", "lamp_glow_ms")
+    )
+    assert metrics["primary_rays"] == 800
+    assert metrics["lamp_glow_rays"] == 2
+    assert metrics["shadow_rays"] == len(secondary_calls) - 2
+    assert (metrics["shadow_rays"] > 0) == shadows
+    assert metrics["rays_cast"] == 800 + len(secondary_calls)
+    np.testing.assert_array_equal(left, observation["eye_left"])
+    np.testing.assert_array_equal(right, observation["eye_right"])
+    assert reported["primary_rays"] == 800
+    metrics["render_ms"] = -1.0
+    assert env.eyes.extra_info()["render_ms"] >= 0.0
+
+
+def test_raycast_looks_up_collision_system_for_each_ray_batch(make_env, monkeypatch):
+    from types import SimpleNamespace
+
+    env = make_env(small_scenario(lights=[{"x": 5.0, "y": 6.0, "target": True}]))
+    observation, _ = env.reset(seed=0)
+    collision_system = env.system.GetCollisionSystem()
+    lookups = []
+    queries = []
+
+    def ray_hit(start, end, result):
+        queries.append(1)
+        return collision_system.RayHit(start, end, result)
+
+    def get_collision_system():
+        lookups.append(1)
+        return SimpleNamespace(RayHit=ray_hit)
+
+    monkeypatch.setattr(env.eyes, "system", SimpleNamespace(GetCollisionSystem=get_collision_system))
+    for _ in range(2):
+        before_queries = len(queries)
+        before_lookups = len(lookups)
+        left, right = env.eyes.render()
+        metrics = env.eyes.extra_info()
+        assert len(lookups) - before_lookups == 2 + metrics["shadow_rays"] + metrics["lamp_glow_rays"]
+        assert len(queries) - before_queries == metrics["rays_cast"]
+        np.testing.assert_array_equal(left, observation["eye_left"])
+        np.testing.assert_array_equal(right, observation["eye_right"])
+
+
+def test_shadow_rays_reuse_lamp_coordinate_lists(make_env, monkeypatch):
+    env = make_env(small_scenario(lights=[{"x": 5.0, "y": 6.0, "target": True}]))
+    observation, _ = env.reset(seed=0)
+    endpoints = []
+    ray_hits_something = env.eyes._ray_hits_something
+
+    def record_endpoint(start, end):
+        endpoints.append(end)
+        return ray_hits_something(start, end)
+
+    monkeypatch.setattr(env.eyes, "_ray_hits_something", record_endpoint)
+    left, right = env.eyes.render()
+    assert env.eyes.extra_info()["shadow_rays"] > 4
+    assert len({id(endpoint) for endpoint in endpoints}) <= 4
+    np.testing.assert_array_equal(left, observation["eye_left"])
+    np.testing.assert_array_equal(right, observation["eye_right"])
+
+
+def test_primary_ray_distances_and_normals_match_individual_queries(make_env):
+    from flycar.env.sensing.eyes import chrono
+
+    env = make_env(small_scenario(lights=[]))
+    env.reset(seed=0)
+    origin = np.array([3.0, 0.0, 1.0])
+    directions = np.array([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    expected_distance = np.full(3, np.inf)
+    expected_normal = np.zeros((3, 3))
+    start = chrono.ChVector3d(*origin.tolist())
+    result = chrono.ChRayhitResult()
+    collision_system = env.system.GetCollisionSystem()
+    for index, direction in enumerate(directions):
+        end = chrono.ChVector3d(*(origin + direction * env.eyes.max_range).tolist())
+        if collision_system.RayHit(start, end, result):
+            expected_distance[index] = result.dist_factor * env.eyes.max_range
+            normal = result.abs_hitNormal
+            expected_normal[index] = (normal.x, normal.y, normal.z)
+
+    assert np.isfinite(expected_distance[:2]).all()
+    assert np.isinf(expected_distance[2])
+    assert not np.array_equal(expected_normal[0], expected_normal[1])
+    distance, normal = env.eyes._cast_rays(origin, directions)
+    np.testing.assert_array_equal(distance, expected_distance)
+    np.testing.assert_array_equal(normal, expected_normal)
+    empty_distance, empty_normal = env.eyes._cast_rays(origin, np.empty((0, 3)))
+    assert empty_distance.shape == (0,)
+    assert empty_normal.shape == (0, 3)
+
+
+def test_raycast_sky_without_surface_hits(make_env, monkeypatch):
+    env = make_env(small_scenario(lights=[]))
+    env.reset(seed=0)
+
+    def miss_all_rays(origin, directions):
+        return np.full(len(directions), np.inf), np.zeros((len(directions), 3))
+
+    monkeypatch.setattr(env.eyes, "_cast_rays", miss_all_rays)
+    for image in env.eyes.render():
+        np.testing.assert_array_equal(
+            image, np.full((20, 20), env.eyes.sky, dtype=np.float32)
+        )
 
 
 def test_a_lamp_on_the_left_is_brighter_in_the_left_eye(make_env):

@@ -24,6 +24,8 @@ import math
 import os
 import subprocess
 import sys
+import time
+from enum import Enum
 from pathlib import Path
 
 import numpy as np
@@ -183,6 +185,20 @@ def pinhole_ray_directions(rows, cols, fov_h_deg, fov_v_deg, yaw):
 
 
 # ----------------------------------------------------------------------------
+# Render metrics
+# ----------------------------------------------------------------------------
+class RenderMetric(Enum):
+    RENDER_MS = 1
+    PRIMARY_MS = 2
+    SHADOW_MS = 3
+    LAMP_GLOW_MS = 4
+    PRIMARY_RAYS = 5
+    SHADOW_RAYS = 6
+    LAMP_GLOW_RAYS = 7
+    RAYS_CAST = 8
+
+
+# ----------------------------------------------------------------------------
 # Backend 1: ray casting on the CPU
 # ----------------------------------------------------------------------------
 
@@ -206,6 +222,8 @@ class RaycastEyes:
     name = "raycast"
 
     def __init__(self, system, vehicle, world, config):
+        self.metrics = {metric: 0 for metric in RenderMetric}
+
         self.system = system
         self.vehicle = vehicle
         self.world = world
@@ -236,6 +254,9 @@ class RaycastEyes:
 
     def render(self):
         """Take a picture with both eyes. Returns (left, right), float32 (rows, cols)."""
+        started = time.perf_counter()
+        for metric in self.metrics:
+            self.metrics[metric] = 0
         chassis_position = self.vehicle.position()
         chassis_rotation = self.vehicle.rotation_matrix()
 
@@ -248,19 +269,33 @@ class RaycastEyes:
             origin = chassis_position + chassis_rotation @ mount_position
             directions = self.directions[side] @ chassis_rotation.T
             images[side] = self._render_one_eye(origin, directions, lights)
+        self.metrics[RenderMetric.RAYS_CAST] = (
+            self.metrics[RenderMetric.PRIMARY_RAYS]
+            + self.metrics[RenderMetric.SHADOW_RAYS]
+            + self.metrics[RenderMetric.LAMP_GLOW_RAYS]
+        )
+        self.metrics[RenderMetric.RENDER_MS] = (time.perf_counter() - started) * 1000
         return images["left"], images["right"]
 
     def raw_images(self):
         """This backend has no camera image."""
         return None, None
 
+    # ---- extra info ----------------------------------------------------------
+
+    def extra_info(self):
+        """Return per-render timings (ms) and ray-query counts."""
+        return {metric.name.lower(): value for metric, value in self.metrics.items()}
+
     # ---- internals ----------------------------------------------------------
 
     def _ray_hits_something(self, start, end):
         """True if anything lies on the straight segment from start to end."""
-        self._ray_start.x, self._ray_start.y, self._ray_start.z = start
-        self._ray_end.x, self._ray_end.y, self._ray_end.z = end
-        return self.system.GetCollisionSystem().RayHit(self._ray_start, self._ray_end, self._ray_result)
+        ray_start = self._ray_start
+        ray_end = self._ray_end
+        ray_start.x, ray_start.y, ray_start.z = start
+        ray_end.x, ray_end.y, ray_end.z = end
+        return self.system.GetCollisionSystem().RayHit(ray_start, ray_end, self._ray_result)
 
     def _cast_rays(self, origin, directions):
         """Cast one ray per direction.
@@ -273,28 +308,31 @@ class RaycastEyes:
         normal = np.zeros((count, 3))
 
         collision_system = self.system.GetCollisionSystem()
+        max_range = self.max_range
         start = self._ray_start
         end = self._ray_end
         result = self._ray_result
+        hit_normal = result.abs_hitNormal
         start.x, start.y, start.z = origin.tolist()
-        end_points = (origin + directions * self.max_range).tolist()
+        end_points = (origin + directions * max_range).tolist()
 
-        for i in range(count):
-            end.x, end.y, end.z = end_points[i]
+        for index, end_point in enumerate(end_points):
+            end.x, end.y, end.z = end_point
             if collision_system.RayHit(start, end, result):
                 # dist_factor is the fraction of the segment travelled before the hit.
-                distance[i] = result.dist_factor * self.max_range
-                hit_normal = result.abs_hitNormal
-                normal[i] = (hit_normal.x, hit_normal.y, hit_normal.z)
+                distance[index] = result.dist_factor * max_range
+                normal[index] = (hit_normal.x, hit_normal.y, hit_normal.z)
         return distance, normal
 
     def _render_one_eye(self, origin, directions, lights):
+        started = time.perf_counter()
         distance, normal = self._cast_rays(origin, directions)
+        self.metrics[RenderMetric.PRIMARY_MS] += (time.perf_counter() - started) * 1000
+        self.metrics[RenderMetric.PRIMARY_RAYS] += len(directions)
         hit = np.isfinite(distance)
 
         # Start with sky everywhere, then fill in the pixels that hit a surface.
         luminance = np.full(len(directions), self.sky)
-
         if hit.any():
             points = origin + directions[hit] * distance[hit, None]
             normals = normal[hit]
@@ -317,24 +355,33 @@ class RaycastEyes:
                 contribution = strength * facing
 
                 if self.shadows:
+                    started = time.perf_counter()
                     # Shadow rays: is the path from this point to the lamp clear?
                     lifted = points + normals * SHADOW_OFFSET_M
-                    for i in np.nonzero(contribution > 1e-3)[0]:
-                        if self._ray_hits_something(lifted[i].tolist(), lamp.tolist()):
-                            contribution[i] = 0.0
+                    shadow_indices = np.nonzero(contribution > 1e-3)[0]
+                    self.metrics[RenderMetric.SHADOW_RAYS] += len(shadow_indices)
+                    lamp_coordinates = lamp.tolist()
+                    shadow_starts = lifted[shadow_indices].tolist()
+                    for index, start in zip(shadow_indices, shadow_starts):
+                        if self._ray_hits_something(start, lamp_coordinates):
+                            contribution[index] = 0.0
+                    self.metrics[RenderMetric.SHADOW_MS] += (time.perf_counter() - started) * 1000
                 received += contribution
 
             luminance[hit] = ALBEDO * received
 
         # The lamps themselves. A lamp far away is smaller than one pixel, so
         # it shows up as a soft glow that gets brighter as the car gets closer.
+        started = time.perf_counter()
+        origin_coordinates = origin.tolist()
         for light in lights:
             lamp = np.array([light["x"], light["y"], light["z"]])
             to_lamp = lamp - origin
             lamp_distance = float(np.linalg.norm(to_lamp))
             if lamp_distance < 1e-6:
                 continue
-            if self._ray_hits_something(origin.tolist(), lamp.tolist()):
+            self.metrics[RenderMetric.LAMP_GLOW_RAYS] += 1
+            if self._ray_hits_something(origin_coordinates, lamp.tolist()):
                 continue   # hidden behind a wall or an obstacle
 
             # Angle between each pixel's viewing direction and the lamp.
@@ -346,6 +393,7 @@ class RaycastEyes:
             fill = min(1.0, (lamp_angle / (0.5 * self.pixel_angle)) ** 2)
             spread = max(self.pixel_angle, lamp_angle)
             luminance += light["intensity"] * fill * np.exp(-0.5 * (angle / spread) ** 2)
+        self.metrics[RenderMetric.LAMP_GLOW_MS] += (time.perf_counter() - started) * 1000
 
         luminance = np.clip(luminance, 0.0, 1.0)
         return luminance.reshape(self.rows, self.cols).astype(np.float32)
