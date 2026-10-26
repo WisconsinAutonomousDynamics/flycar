@@ -112,7 +112,7 @@ def test_raycast_render_metrics(make_env, monkeypatch, shadows):
     assert env.eyes.extra_info()["render_ms"] >= 0.0
 
 
-def test_raycast_reuses_collision_system_but_not_query_results(make_env, monkeypatch):
+def test_raycast_looks_up_collision_system_for_each_ray_batch(make_env, monkeypatch):
     from types import SimpleNamespace
 
     env = make_env(small_scenario(lights=[{"x": 5.0, "y": 6.0, "target": True}]))
@@ -130,11 +130,13 @@ def test_raycast_reuses_collision_system_but_not_query_results(make_env, monkeyp
         return SimpleNamespace(RayHit=ray_hit)
 
     monkeypatch.setattr(env.eyes, "system", SimpleNamespace(GetCollisionSystem=get_collision_system))
-    for frame in range(2):
-        before = len(queries)
+    for _ in range(2):
+        before_queries = len(queries)
+        before_lookups = len(lookups)
         left, right = env.eyes.render()
-        assert len(lookups) == frame + 1
-        assert len(queries) - before == env.eyes.extra_info()["rays_cast"]
+        metrics = env.eyes.extra_info()
+        assert len(lookups) - before_lookups == 2 + metrics["shadow_rays"] + metrics["lamp_glow_rays"]
+        assert len(queries) - before_queries == metrics["rays_cast"]
         np.testing.assert_array_equal(left, observation["eye_left"])
         np.testing.assert_array_equal(right, observation["eye_right"])
 

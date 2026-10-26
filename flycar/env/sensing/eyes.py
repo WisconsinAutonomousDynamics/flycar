@@ -257,7 +257,6 @@ class RaycastEyes:
         started = time.perf_counter()
         for metric in self.metrics:
             self.metrics[metric] = 0
-        self._ray_hit = self.system.GetCollisionSystem().RayHit
         chassis_position = self.vehicle.position()
         chassis_rotation = self.vehicle.rotation_matrix()
 
@@ -296,7 +295,7 @@ class RaycastEyes:
         ray_end = self._ray_end
         ray_start.x, ray_start.y, ray_start.z = start
         ray_end.x, ray_end.y, ray_end.z = end
-        return self._ray_hit(ray_start, ray_end, self._ray_result)
+        return self.system.GetCollisionSystem().RayHit(ray_start, ray_end, self._ray_result)
 
     def _cast_rays(self, origin, directions):
         """Cast one ray per direction.
@@ -308,7 +307,7 @@ class RaycastEyes:
         distance = np.full(count, np.inf)
         normal = np.zeros((count, 3))
 
-        ray_hit = self._ray_hit
+        collision_system = self.system.GetCollisionSystem()
         max_range = self.max_range
         start = self._ray_start
         end = self._ray_end
@@ -319,7 +318,7 @@ class RaycastEyes:
 
         for index, end_point in enumerate(end_points):
             end.x, end.y, end.z = end_point
-            if ray_hit(start, end, result):
+            if collision_system.RayHit(start, end, result):
                 # dist_factor is the fraction of the segment travelled before the hit.
                 distance[index] = result.dist_factor * max_range
                 normal[index] = (hit_normal.x, hit_normal.y, hit_normal.z)
