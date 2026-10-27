@@ -15,6 +15,9 @@ SECTIONS = {
         "throttle_rate_per_s": 4.0,    # max change of the throttle command per second
         "steering_rate_per_s": 4.0,    # max change of the steering command per second
         "brake_rate_per_s": 10.0,      # max change of the brake command per second
+        "tire_model": "tmeasy",        # tire model to use
+        "steering_gain": 1.0,          # multiplier for the steering command
+        "throttle_curve_exponent": 1.0,# default exponent for the throttle curve (1 = linear)
     },
     "spawn": {
         "x": 0.0,
@@ -31,6 +34,7 @@ SECTIONS = {
 
 # Terrain types that are implemented. (Planned: patches, ramps, SCM soft soil.)
 TERRAIN_TYPES = ("rigid_flat",)
+TIRE_MODELS = ("tmeasy", "rigid")
 
 
 def validate(scenario, where):
@@ -40,3 +44,10 @@ def validate(scenario, where):
         raise ScenarioError(f"{where}: terrain.type: {terrain['type']} is not implemented yet.")
     if not terrain["friction"] > 0:
         raise ScenarioError(f"{where}: terrain.friction must be positive, got {terrain['friction']}.")
+    vehicle = scenario["vehicle"]
+    if vehicle["tire_model"] not in TIRE_MODELS:
+        raise ScenarioError(f"{where}: vehicle.tire_model must be one of {TIRE_MODELS}, got {vehicle['tire_model']!r}.")
+    if vehicle["steering_gain"] < 0:
+        raise ScenarioError(f"{where}: vehicle.steering_gain must be non-negative, got {vehicle['steering_gain']}.")
+    if vehicle["throttle_curve_exponent"] <= 0:
+        raise ScenarioError(f"{where}: vehicle.throttle_curve_exponent must be positive, got {vehicle['throttle_curve_exponent']}.")

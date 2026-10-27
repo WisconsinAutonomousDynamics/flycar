@@ -58,3 +58,32 @@ implement it in `flycar/config/vehicle.py` and `flycar/env/terrain.py`.
 pytest tests/test_vehicle.py
 python run.py --scenario scenarios/team_vehicle.yaml --driver braitenberg --dashboard
 ```
+
+## Fly-like vehicle settings
+
+```yaml
+vehicle:
+  max_speed_mps: 2.0             # top speed governor
+  steering_rate_per_s: 20.0      # how quickly the steering command can change
+  steering_gain: 10.0            # steering strength; larger values turn more sharply
+  brake_rate_per_s: 20.0         # how quickly the brake command can increase
+  throttle_curve_exponent: 0.125 # stronger throttle response at partial input
+```
+
+### Measured handling
+
+Measured with these settings in a headless, seed-0 empty arena at a fixed spawn
+(0, 0, 0), with walls disabled and the `raycast` eye backend:
+
+| A1 measurement | Result |
+|---|---:|
+| Governed top speed | 1.99 m/s (mean over the final 2 s) |
+| 0–3 m/s time | Not reached; speed tops out at about 2.00 m/s. Reaches 1.90 m/s in 0.27 s. |
+| Braking distance | 0.65 m, from 1.96 m/s to 0.05 m/s or less |
+| Minimum turning radius | Not reliably measured at low speed: the path did not settle into a circle. A diagnostic circle fit gave 10.65 m at a mean 1.84 m/s, which does not meet the A1 low-speed condition. |
+| Steering step response | 0.01 s to the first sample at or above 90% of the final yaw-rate magnitude; the response overshoots. |
+
+The 0–3 m/s test cannot complete with `max_speed_mps: 2.0`; its 0–1.9 m/s
+time is included as a useful substitute. The turning-radius and steering-response
+results should be revisited if the steering gain is tuned to produce a stable,
+low-speed turn.
