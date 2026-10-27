@@ -75,7 +75,9 @@ def test_lower_steering_gain_reduces_yaw_rate(make_env):
 def test_rigid_tires_change_braking_distance(make_env):
     distances = []
     for tire_model in ("tmeasy", "rigid"):
-        env = make_env(_empty_arena_vehicle_scenario(tire_model=tire_model))
+        scenario = _empty_arena_vehicle_scenario(tire_model=tire_model)
+        scenario["arena"].update({"size_m": [200.0, 200.0], "walls": False})
+        env = make_env(scenario)
         observation, _ = env.reset(seed=0)
         for _ in range(1000):
             observation, _, _, _, info = env.step([1.0, 0.0, 0.0])

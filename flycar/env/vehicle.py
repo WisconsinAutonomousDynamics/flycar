@@ -168,8 +168,12 @@ class FlyCarVehicle:
         """
         self.applied_action = limit_action(action, self.applied_action, self.max_rates, control_period)
 
-        throttle = float(self.applied_action[THROTTLE]**self.config["throttle_curve_exponent"])
-        steering = float(self.applied_action[STEERING]*self.config["steering_gain"])
+        if self.config["throttle_curve_exponent"] == 1.0 and self.config["steering_gain"] == 1.0:
+            throttle = float(self.applied_action[THROTTLE])
+            steering = float(self.applied_action[STEERING])
+        else:
+            throttle = float(self.applied_action[THROTTLE] ** self.config["throttle_curve_exponent"])
+            steering = float(self.applied_action[STEERING] * self.config["steering_gain"])
         brake = float(self.applied_action[BRAKE])
 
         # Speed governor: fade the throttle out as the car nears its top speed.
