@@ -355,22 +355,78 @@ class RaycastEyes:
 # Backend 2: Chrono sensor-module cameras (GPU)
 # ----------------------------------------------------------------------------
 
+def lamp_glow(origin, directions, lights, pixel_angle, is_hidden):
+    """The raycast backend's lamp glow, one value per viewing direction.
+
+    A lamp far away is smaller than one pixel, so it shows up as a soft glow
+    that gets brighter as the eye gets closer. ``is_hidden(origin, lamp)``
+    says whether something stands between the eye and a lamp. Same arithmetic
+    as ``RaycastEyes._render_one_eye``, so both backends draw the same glow.
+    """
+    glow = np.zeros(len(directions))
+    for light in lights:
+        lamp = np.array([light["x"], light["y"], light["z"]])
+        to_lamp = lamp - origin
+        lamp_distance = float(np.linalg.norm(to_lamp))
+        if lamp_distance < 1e-6 or is_hidden(origin, lamp):
+            continue
+        cosine = np.clip(directions @ (to_lamp / lamp_distance), -1.0, 1.0)
+        angle = np.arccos(cosine)
+        lamp_angle = math.atan2(LAMP_RADIUS_M, lamp_distance)
+        fill = min(1.0, (lamp_angle / (0.5 * pixel_angle)) ** 2)
+        spread = max(pixel_angle, lamp_angle)
+        glow += light["intensity"] * fill * np.exp(-0.5 * (angle / spread) ** 2)
+    return glow
+
+
+def srgb_to_linear(values):
+    """Undo the standard sRGB encoding that 8-bit camera images are stored in."""
+    return np.where(values <= 0.04045, values / 12.92, ((values + 0.055) / 1.055) ** 2.4)
+
+
 class SensorEyes:
     """GPU eyes: one ``ChCameraSensor`` per eye, averaged down to the eye grid.
 
     NOTE: this backend needs an NVIDIA GPU with OptiX. It follows the bundled
-    PyChrono sensor demos (demo_SEN_camera.py), but brightness is not calibrated
-    against the raycast backend: expect similar pictures, not identical numbers.
+    PyChrono sensor demos (demo_SEN_camera.py). With default settings its
+    brightness is not calibrated against the raycast backend; the ``eyes.sensor_*``
+    settings (see docs/teams/vision.md) bring the two close together.
     """
 
     name = "sensor"
 
+    # Lamps' scene lights: constant brightness (Chrono's default) or dimmer with
+    # distance, and their reach in multiples of falloff_m. Class defaults, so
+    # update() also works on objects built without __init__ (tests).
+    light_falloff = False
+    light_range = 10.0
+
     def __init__(self, system, vehicle, world, config):
         import pychrono.sensor as sens   # imported here: it only exists on some machines
 
+        from flycar.env.sensing.sensor_probe import use_installed_shaders
+        use_installed_shaders(sens)
+
+        self.system = system
+        self.vehicle = vehicle
         self.world = world
 
         self.rows, self.cols = int(config["resolution"][0]), int(config["resolution"][1])
+
+        # Calibration against the raycast backend (all off by default).
+        self.linearize = bool(config["sensor_linearize"])
+        self.brightness_scale = float(config["sensor_brightness_scale"])
+        self.light_falloff = bool(config["sensor_light_falloff"])
+        self.light_range = float(config["sensor_light_range"])
+        self.glow = bool(config["sensor_lamp_glow"])
+
+        # The glow is computed like the raycast backend's, from the same rays.
+        self.pixel_angle = math.radians(config["fov_h_deg"]) / self.cols
+        self.mounts = eye_mounts(config)
+        self.directions = {
+            side: pinhole_ray_directions(self.rows, self.cols, config["fov_h_deg"], config["fov_v_deg"], yaw)
+            for side, (_, yaw) in self.mounts.items()
+        }
 
         # Raw image size: a whole number of camera pixels per eye pixel, with
         # the aspect ratio that gives the requested vertical field of view.
@@ -395,7 +451,7 @@ class SensorEyes:
         self.light_positions = []
         for light in world.current_lights():
             position, color, max_range = self._point_light(light)
-            self.light_ids.append(self.manager.scene.AddPointLight(position, color, max_range))
+            self.light_ids.append(self.manager.scene.AddPointLight(position, color, max_range, *self._light_flags()))
             self.light_positions.append((light["x"], light["y"], light["z"]))
 
         # ---- One camera per eye ---------------------------------------------
@@ -423,13 +479,18 @@ class SensorEyes:
 
         self._raw = {"left": None, "right": None}
 
-    @staticmethod
-    def _point_light(light):
+    def _point_light(self, light):
         """(position, color, max_range) of the scene light for one lamp."""
         # Just above the lamp ball, so the ball does not block its own light.
         position = chrono.ChVector3f(light["x"], light["y"], light["z"] + LAMP_RADIUS_M + 0.1)
         color = chrono.ChColor(light["intensity"], light["intensity"], light["intensity"])
-        return position, color, 10.0 * light["falloff_m"]
+        return position, color, self.light_range * light["falloff_m"]
+
+    def _light_flags(self):
+        """Extra arguments for Add/ModifyPointLight: none by default (constant light)."""
+        # Chrono's const_color=True (the default) keeps a light equally bright at
+        # every distance; max_range only has an effect with const_color=False.
+        return (False,) if self.light_falloff else ()
 
     def update(self):
         """Let the sensor manager render if a camera is due. Call every physics step."""
@@ -438,7 +499,7 @@ class SensorEyes:
             position = (light["x"], light["y"], light["z"])
             if position != self.light_positions[index]:
                 point, color, max_range = self._point_light(light)
-                self.manager.scene.ModifyPointLight(self.light_ids[index], point, color, max_range)
+                self.manager.scene.ModifyPointLight(self.light_ids[index], point, color, max_range, *self._light_flags())
                 self.light_positions[index] = position
         self.manager.Update()
 
@@ -458,14 +519,37 @@ class SensorEyes:
                 images[side] = np.zeros((self.rows, self.cols), dtype=np.float32)
                 continue
 
-            # RGB -> luminance in [0, 1] (standard Rec. 709 weights).
+            # RGB -> luminance in [0, 1] (standard Rec. 709 weights). The camera
+            # stores sRGB-encoded values; the raycast backend works in linear light.
             rgb = raw.astype(np.float32) / 255.0
+            if self.linearize:
+                rgb = srgb_to_linear(rgb)
             gray = 0.2126 * rgb[:, :, 0] + 0.7152 * rgb[:, :, 1] + 0.0722 * rgb[:, :, 2]
 
             # Average each block of camera pixels into one eye pixel.
             blocks = gray.reshape(self.rows, self.block_h, self.cols, self.block_w)
-            images[side] = np.clip(blocks.mean(axis=(1, 3)), 0.0, 1.0).astype(np.float32)
+            image = blocks.mean(axis=(1, 3))
+            if self.brightness_scale != 1.0:
+                image = image * self.brightness_scale
+            if self.glow:
+                image = image + self._glow(side).reshape(self.rows, self.cols)
+            images[side] = np.clip(image, 0.0, 1.0).astype(np.float32)
         return images["left"], images["right"]
+
+    def _glow(self, side):
+        """Raycast-style glow of the visible lamps for one eye, flat (rows * cols)."""
+        chassis_position = self.vehicle.position()
+        chassis_rotation = self.vehicle.rotation_matrix()
+        mount_position, _ = self.mounts[side]
+        origin = chassis_position + chassis_rotation @ mount_position
+        directions = self.directions[side] @ chassis_rotation.T
+        return lamp_glow(origin, directions, self.world.current_lights(), self.pixel_angle, self._is_hidden)
+
+    def _is_hidden(self, origin, lamp):
+        """True if a wall or an obstacle stands between the eye and the lamp."""
+        start = chrono.ChVector3d(*origin.tolist())
+        end = chrono.ChVector3d(*lamp.tolist())
+        return self.system.GetCollisionSystem().RayHit(start, end, chrono.ChRayhitResult())
 
     def raw_images(self):
         """The latest full-resolution RGB images (uint8), or None before the first frame."""

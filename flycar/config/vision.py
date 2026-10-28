@@ -21,6 +21,13 @@ SECTIONS = {
         "shadows": True,           # raycast backend: test whether each surface point can see each light
         "camera_width_px": 240,    # sensor backend: raw image width (height follows from the FOVs)
         "mount_m": [1.0, 0.3, 0.75],   # eye position on the chassis: forward, sideways (mirrored), up
+        # Sensor backend calibration against raycast (backend parity). The defaults
+        # keep today's sensor images; docs/teams/vision.md lists the matching values.
+        "sensor_linearize": False,         # undo the camera's sRGB encoding before averaging pixels
+        "sensor_brightness_scale": 1.0,    # multiply the eye image by this factor (> 0)
+        "sensor_light_falloff": False,     # lamps' scene lights get dimmer with distance (else constant)
+        "sensor_light_range": 10.0,        # reach of each lamp's scene light, in multiples of its falloff_m (> 0)
+        "sensor_lamp_glow": False,         # add the raycast backend's glow around visible lamps
         "noise_std": 0.0,          # (planned) standard deviation of pixel noise; 0 = no noise
         "motion_blur": False,      # (planned) blur the picture while the car turns
     },
@@ -48,6 +55,14 @@ def validate(scenario, where):
 
     if scenario["eyes"]["backend"] not in ("auto", "sensor", "raycast"):
         raise ScenarioError(f"{where}: eyes.backend must be auto, sensor or raycast.")
+
+    for key in ("sensor_linearize", "sensor_light_falloff", "sensor_lamp_glow"):
+        if not isinstance(scenario["eyes"][key], bool):
+            raise ScenarioError(f"{where}: eyes.{key} must be true or false.")
+    for key in ("sensor_brightness_scale", "sensor_light_range"):
+        value = scenario["eyes"][key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
+            raise ScenarioError(f"{where}: eyes.{key} must be a number greater than 0, got {value!r}.")
 
     for section, defaults in NOT_YET_IMPLEMENTED.items():
         require_defaults(scenario[section], defaults, section, where)
