@@ -541,6 +541,7 @@ def save_eye_figure(env, path):
     map_axis.set_title("ray hit points")
     map_axis.legend(fontsize=7)
     figure.tight_layout()
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path)
     print(path)
     return left, right
@@ -571,7 +572,7 @@ def show_fly_eyes(left, right):
 #
 # Runs this file. The car is parked at x = -5 m, y = 0 m, facing +x (yaw 0),
 # in scenarios/team_vision.yaml with seed 0. The eyes are the raycast backend.
-# It writes eyes_view.png: both eye images, which pixels are in shadow (black
+# It writes outputs/eyes_view.png: both eye images, which pixels are in shadow (black
 # in the bottom row), and the ray hit points on a top-down map. A pixel is in
 # shadow when something blocks the lamp from the spot it sees, so the lamp is
 # drawn on the map too. Then two windows open. The 3D
@@ -593,7 +594,10 @@ if __name__ == "__main__":
     parser.add_argument("--y", type=float, required=True)
     parser.add_argument("--yaw-deg", type=float, required=True)
     parser.add_argument("--eye", choices=("left", "right"), default="left")
-    parser.add_argument("-o", "--output", default="eyes_view.png")
+    parser.add_argument(
+        "-o", "--output",
+        default=str(Path(__file__).resolve().parents[3] / "outputs" / "eyes_view.png"),
+    )
     args = parser.parse_args()
 
     os.environ[BACKEND_ENV_VAR] = "raycast"
