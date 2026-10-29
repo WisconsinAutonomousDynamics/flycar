@@ -2,11 +2,19 @@
 #
 # Headless, with the CPU eye backend forced (FLYCAR_EYE_BACKEND=raycast), so the
 # results do not depend on whether the runner has a GPU. The conda environment
-# is cached and only rebuilt when environment.yml changes.
+# is cached and only rebuilt when its spec file changes.
+#
+# Linux installs the exact packages in environment-linux-64.lock: the baseline
+# episodes must match bit for bit, and a fresh solve of environment.yml can pick
+# up different library builds (issue #12). Windows and macOS use environment.yml.
+#
+# workflow_dispatch: run it by hand on any branch (Actions tab -> tests -> Run workflow),
+# for example to re-check main.
 name: tests
 
 on:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   pytest:
@@ -20,7 +28,7 @@ jobs:
       FLYCAR_EYE_BACKEND: raycast
       MPLBACKEND: Agg
       # Bump this to throw away the cached environment and rebuild it.
-      CACHE_NUMBER: 0
+      CACHE_NUMBER: 1
 
     steps:
       - uses: actions/checkout@v4
@@ -36,11 +44,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CONDA }}/envs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
+          key: conda-${{ runner.os }}-${{ hashFiles('environment-linux-64.lock') }}-${{ env.CACHE_NUMBER }}
 
-      - name: Create the conda environment from environment.yml
+      - name: Install the exact packages from environment-linux-64.lock
         if: steps.cache.outputs.cache-hit != 'true'
-        run: conda env update -n flycar -f environment.yml
+        run: conda install --yes -n flycar --file environment-linux-64.lock
+
+      - name: Show the installed versions
+        run: conda list -n flycar | grep -E "^(python|numpy|pychrono|libblas|mkl) "
 
       - name: Check the installation
         run: python scripts/check_env.py
