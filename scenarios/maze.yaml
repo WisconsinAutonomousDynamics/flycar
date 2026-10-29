@@ -1,0 +1,109 @@
+config = {
+    "cells": [10, 10],         
+    "wall_thickness_m": 0.25,
+    "wall_height_m": 1.5,
+    "gap_m": 2.5,             
+}
+
+
+try:
+    rng
+except NameError:
+    import random
+    rng = random.Random()
+
+CELLS_Y, CELLS_X = config["cells"]
+HEIGHT = 2 * CELLS_Y + 1      
+WIDTH = 2 * CELLS_X + 1
+
+WALL, EMPTY = '#', ' '
+NORTH, SOUTH, EAST, WEST = 'n', 's', 'e', 'w'
+
+maze = {(x, y): WALL for x in range(WIDTH) for y in range(HEIGHT)}
+
+
+def generate(start_x=1, start_y=1):
+    """Carve the maze with an iterative depth-first search (no recursion
+    limit problems for large mazes)."""
+    visited = {(start_x, start_y)}
+    maze[(start_x, start_y)] = EMPTY
+    stack = [(start_x, start_y)]
+
+    while stack:
+        x, y = stack[-1]
+        unvisited = []
+        if y > 1 and (x, y - 2) not in visited:
+            unvisited.append(NORTH)
+        if y < HEIGHT - 2 and (x, y + 2) not in visited:
+            unvisited.append(SOUTH)
+        if x > 1 and (x - 2, y) not in visited:
+            unvisited.append(WEST)
+        if x < WIDTH - 2 and (x + 2, y) not in visited:
+            unvisited.append(EAST)
+        if not unvisited:
+            stack.pop()      
+            continue
+        d = rng.choice(unvisited)
+        if d == NORTH:
+            nx, ny = x, y - 2
+            maze[(x, y - 1)] = EMPTY
+        elif d == SOUTH:
+            nx, ny = x, y + 2
+            maze[(x, y + 1)] = EMPTY
+        elif d == WEST:
+            nx, ny = x - 2, y
+            maze[(x - 1, y)] = EMPTY
+        else:
+            nx, ny = x + 2, y
+            maze[(x + 1, y)] = EMPTY
+        
+        maze[(nx, ny)] = EMPTY
+        visited.add((nx, ny))
+        stack.append((nx, ny))
+
+
+generate()
+
+
+t = config["wall_thickness_m"]
+gap = config["gap_m"]
+h = config["wall_height_m"]
+
+def cell_size(i):
+    
+    return t if i % 2 == 0 else gap
+
+
+def axis_starts(n):
+    starts, pos = [], 0.0
+    for i in range(n):
+        starts.append(pos)
+        pos += cell_size(i)
+    return starts, pos          
+
+
+x_starts, total_x = axis_starts(WIDTH)
+y_starts, total_y = axis_starts(HEIGHT)
+
+
+def build_walls():
+    walls = []
+    for (gx, gy), tile in maze.items():
+        if tile != WALL:
+            continue
+        sx, sy = cell_size(gx), cell_size(gy)
+        
+        cx = x_starts[gx] + sx / 2 - total_x / 2
+        cy = y_starts[gy] + sy / 2 - total_y / 2
+        walls.append({
+            "shape": "box",
+            "x": round(cx, 4),
+            "y": round(cy, 4),
+            "yaw": 0.0,
+            "size_m": [sx, sy, h],
+        })
+    return walls
+
+
+walls = build_walls()
+print(f"{len(walls)} walls")
