@@ -9,6 +9,16 @@ from conftest import SCENARIO_FILES, small_scenario
 from flycar.env import spaces
 from flycar.env.scenario import ScenarioError, load_scenario
 
+CONTROL_PERIOD_S = 0.01
+
+
+def _empty_arena_vehicle_scenario(**vehicle_overrides):
+    path = next(path for path in SCENARIO_FILES if path.stem == "empty_arena")
+    scenario = load_scenario(path)
+    scenario["spawn"].update({"x": 0.0, "y": 0.0, "yaw_deg": 0.0})
+    scenario["vehicle"].update(vehicle_overrides)
+    return scenario
+
 
 def test_respawn_matches_the_sampled_pose(make_env):
     path = SCENARIO_FILES[[p.stem for p in SCENARIO_FILES].index("light_seek")]
@@ -46,6 +56,97 @@ def test_positive_steering_turns_left_and_speed_is_governed(make_env):
     assert info["pose"][1] > 0.5                              # ended up on the left (+y)
     top_speed = env.scenario["vehicle"]["max_speed_mps"]
     assert 0.8 * top_speed < observation["imu"][spaces.IMU_SPEED] < top_speed + 0.2
+
+
+@pytest.mark.slow
+def test_lower_steering_gain_reduces_yaw_rate(make_env):
+    yaw_rates = []
+    for gain in (1.0, 0.5):
+        env = make_env(_empty_arena_vehicle_scenario(steering_gain=gain))
+        observation, _ = env.reset(seed=0)
+        for _ in range(250):
+            observation, _, _, _, _ = env.step([0.2, 1.0, 0.0])
+        yaw_rates.append(abs(float(observation["imu"][spaces.IMU_YAW_RATE])))
+
+    assert yaw_rates[1] < yaw_rates[0] * 0.9
+
+
+@pytest.mark.slow
+def test_rigid_tires_change_braking_distance(make_env):
+    distances = []
+    for tire_model in ("tmeasy", "rigid"):
+        scenario = _empty_arena_vehicle_scenario(tire_model=tire_model)
+        scenario["arena"].update({"size_m": [200.0, 200.0], "walls": False})
+        env = make_env(scenario)
+        observation, _ = env.reset(seed=0)
+        for _ in range(1000):
+            observation, _, _, _, info = env.step([1.0, 0.0, 0.0])
+            if observation["imu"][spaces.IMU_SPEED] >= 3.9:
+                break
+        assert observation["imu"][spaces.IMU_SPEED] >= 3.9
+        start_x = float(info["pose"][0])
+        for _ in range(500):
+            observation, _, _, _, info = env.step([0.0, 0.0, 1.0])
+            if observation["imu"][spaces.IMU_SPEED] <= 0.05:
+                break
+        assert observation["imu"][spaces.IMU_SPEED] <= 0.05
+        distances.append(float(info["pose"][0]) - start_x)
+
+    assert abs(distances[1] - distances[0]) > max(0.05, distances[0] * 0.02)
+
+
+@pytest.mark.slow
+def test_larger_throttle_exponent_slows_partial_throttle_acceleration(make_env):
+    times = []
+    for exponent in (1.0, 2.0):
+        env = make_env(_empty_arena_vehicle_scenario(throttle_curve_exponent=exponent))
+        observation, _ = env.reset(seed=0)
+        for step in range(1500):
+            observation, _, _, _, _ = env.step([0.5, 0.0, 0.0])
+            if observation["imu"][spaces.IMU_SPEED] >= 3.0:
+                times.append((step + 1) * CONTROL_PERIOD_S)
+                break
+
+    assert len(times) == 2, "both throttle settings must reach 3 m/s"
+    assert times[1] > times[0] * 1.1
+
+
+def test_vehicle_tuning_defaults_preserve_the_current_behaviour():
+    """Check that the default values in config/vehicle.py reproduce the current behaviour.
+
+    This is a regression test for the vehicle & terrain team. If you change the defaults,
+    you must update this test to match the new behaviour.
+    """
+    scenario = load_scenario({})
+    vehicle = scenario["vehicle"]
+    assert vehicle["tire_model"] == "tmeasy"
+    assert vehicle["steering_gain"] == 1.0
+    assert vehicle["throttle_curve_exponent"] == 1.0
+
+
+@pytest.mark.parametrize("gain", (1.0, 3.0))
+def test_steering_gain_accepts_values_above_one(gain):
+    scenario = load_scenario({"vehicle": {"steering_gain": gain}})
+
+    assert scenario["vehicle"]["steering_gain"] == gain
+
+
+def test_steering_gain_rejects_negative_values():
+    with pytest.raises(ScenarioError, match=r"vehicle\.steering_gain must be non-negative"):
+        load_scenario({"vehicle": {"steering_gain": -1.01}})
+
+
+def test_scaled_steering_is_clamped_before_reaching_chrono(make_env):
+    scenario = _empty_arena_vehicle_scenario(steering_gain=3.0, steering_rate_per_s=1000.0)
+    env = make_env(scenario)
+    env.reset(seed=0)
+
+    env.vehicle.set_action([0.0, 1.0, 0.0], CONTROL_PERIOD_S)
+    assert env.vehicle.inputs.m_steering == 1.0
+    env.vehicle.set_action([0.0, -1.0, 0.0], CONTROL_PERIOD_S)
+    assert env.vehicle.inputs.m_steering == -1.0
+    env.vehicle.set_action([0.0, 0.2, 0.0], CONTROL_PERIOD_S)
+    assert env.vehicle.inputs.m_steering == pytest.approx(0.6)
 
 
 # ----------------------------------------------------------------------------
