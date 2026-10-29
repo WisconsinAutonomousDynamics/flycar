@@ -1,0 +1,66 @@
+# Record the full baseline episodes on GitHub's machine, under exactly the
+# conditions the "tests" workflow checks them with (see ci.yml).
+#
+# Leads only, and only from an unchanged main, or after an agreed behaviour
+# change (api-change issue). Never to make a failing pull request pass.
+#
+#   1. Actions tab -> record baseline -> Run workflow (branch: main).
+#   2. Download the "baseline-episodes" artifact from the finished run.
+#   3. Copy its .npz files into tests/baseline/, commit and push.
+#
+# Only the episode files are uploaded: setup.json and maneuver.npz are checked
+# on every OS and do not need GitHub's machine.
+name: record baseline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  record:
+    # Keep the runner, the env vars and the environment in sync with ci.yml.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      FLYCAR_EYE_BACKEND: raycast
+      MPLBACKEND: Agg
+      GLIBC_TUNABLES: glibc.cpu.hwcaps=-AVX,-AVX2,-FMA,-FMA4,-AVX512F,-AVX512DQ,-AVX512VL,-AVX512BW,-AVX512CD
+      FLYCAR_BASELINE_EPISODES: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: flycar
+
+      - name: Install the exact packages from environment-linux-64.lock
+        run: conda install --yes -n flycar --file environment-linux-64.lock
+
+      - name: Show the machine and the installed versions
+        run: |
+          grep PRETTY_NAME /etc/os-release
+          ldd --version | head -1
+          grep -m1 "model name" /proc/cpuinfo
+          conda list -n flycar | grep -E "^(python|numpy|pychrono|libblas|mkl) "
+
+      - name: Record the baseline
+        run: |
+          python scripts/record_baseline.py
+          # Keep the committed setup and maneuver files; only the episodes are new.
+          git checkout -- tests/baseline/setup.json tests/baseline/maneuver.npz
+
+      - name: Check the new recording against a second run
+        run: pytest tests/test_baseline.py -v
+
+      - name: Upload the episode files
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-episodes
+          path: |
+            tests/baseline/*.npz
+            !tests/baseline/maneuver.npz

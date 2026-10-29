@@ -4,9 +4,16 @@
 # results do not depend on whether the runner has a GPU. The conda environment
 # is cached and only rebuilt when its spec file changes.
 #
-# Linux installs the exact packages in environment-linux-64.lock: the baseline
-# episodes must match bit for bit, and a fresh solve of environment.yml can pick
-# up different library builds (issue #12). Windows and macOS use environment.yml.
+# The Linux job also runs the full baseline episodes, which must match the
+# recording bit for bit (issue #12). Three things make that possible:
+#   * exact packages from environment-linux-64.lock, not a fresh solve;
+#   * a fixed OS image (ubuntu-24.04, not ubuntu-latest), so glibc's math
+#     library is always the same version;
+#   * GLIBC_TUNABLES, which hides AVX/FMA/AVX-512 from glibc so its math
+#     functions (sin, exp, ...) take the same code path on every CPU. GitHub
+#     runners are a mix of CPUs, and those paths round the last digit differently.
+# The episodes are recorded under the same conditions by record-baseline.yml.
+# Windows and macOS use environment.yml and skip the full episodes.
 #
 # workflow_dispatch: run it by hand on any branch (Actions tab -> tests -> Run workflow),
 # for example to re-check main.
@@ -18,7 +25,8 @@ on:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    # Keep in sync with record-baseline.yml.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     defaults:
       run:
@@ -27,6 +35,10 @@ jobs:
     env:
       FLYCAR_EYE_BACKEND: raycast
       MPLBACKEND: Agg
+      # Same math code path on every CPU (see the top of this file).
+      GLIBC_TUNABLES: glibc.cpu.hwcaps=-AVX,-AVX2,-FMA,-FMA4,-AVX512F,-AVX512DQ,-AVX512VL,-AVX512BW,-AVX512CD
+      # Run the full baseline episodes (skipped everywhere else).
+      FLYCAR_BASELINE_EPISODES: "1"
       # Bump this to throw away the cached environment and rebuild it.
       CACHE_NUMBER: 1
 
@@ -50,8 +62,12 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: conda install --yes -n flycar --file environment-linux-64.lock
 
-      - name: Show the installed versions
-        run: conda list -n flycar | grep -E "^(python|numpy|pychrono|libblas|mkl) "
+      - name: Show the machine and the installed versions
+        run: |
+          grep PRETTY_NAME /etc/os-release
+          ldd --version | head -1
+          grep -m1 "model name" /proc/cpuinfo
+          conda list -n flycar | grep -E "^(python|numpy|pychrono|libblas|mkl) "
 
       - name: Check the installation
         run: python scripts/check_env.py
