@@ -27,6 +27,10 @@ jobs:
       FLYCAR_EYE_BACKEND: raycast
       MPLBACKEND: Agg
       GLIBC_TUNABLES: glibc.cpu.hwcaps=-AVX,-AVX2,-FMA,-FMA4,-AVX512F,-AVX512DQ,-AVX512VL,-AVX512BW,-AVX512CD
+      # NumPy's matrix library picks its kernels from the CPU too; fix them
+      # (Haswell = AVX2, which every GitHub x64 runner has) and use one thread.
+      OPENBLAS_CORETYPE: Haswell
+      OPENBLAS_NUM_THREADS: "1"
       FLYCAR_BASELINE_EPISODES: "1"
 
     steps:
@@ -46,6 +50,7 @@ jobs:
           grep PRETTY_NAME /etc/os-release
           ldd --version | head -1
           grep -m1 "model name" /proc/cpuinfo
+          OPENBLAS_VERBOSE=2 python -c "import numpy as np; np.ones((50, 50)) @ np.ones((50, 50))"
           conda list -n flycar | grep -E "^(python|numpy|pychrono|libblas|mkl) "
 
       - name: Record the baseline

@@ -5,13 +5,15 @@
 # is cached and only rebuilt when its spec file changes.
 #
 # The Linux job also runs the full baseline episodes, which must match the
-# recording bit for bit (issue #12). Three things make that possible:
+# recording bit for bit (issue #12). Four things make that possible:
 #   * exact packages from environment-linux-64.lock, not a fresh solve;
 #   * a fixed OS image (ubuntu-24.04, not ubuntu-latest), so glibc's math
 #     library is always the same version;
 #   * GLIBC_TUNABLES, which hides AVX/FMA/AVX-512 from glibc so its math
 #     functions (sin, exp, ...) take the same code path on every CPU. GitHub
 #     runners are a mix of CPUs, and those paths round the last digit differently.
+#   * OPENBLAS_CORETYPE, which does the same for NumPy's matrix library
+#     (the eyes use it, and the Braitenberg driver steers from the eyes).
 # The episodes are recorded under the same conditions by record-baseline.yml.
 # Windows and macOS use environment.yml and skip the full episodes.
 #
@@ -37,6 +39,10 @@ jobs:
       MPLBACKEND: Agg
       # Same math code path on every CPU (see the top of this file).
       GLIBC_TUNABLES: glibc.cpu.hwcaps=-AVX,-AVX2,-FMA,-FMA4,-AVX512F,-AVX512DQ,-AVX512VL,-AVX512BW,-AVX512CD
+      # NumPy's matrix library picks its kernels from the CPU too; fix them
+      # (Haswell = AVX2, which every GitHub x64 runner has) and use one thread.
+      OPENBLAS_CORETYPE: Haswell
+      OPENBLAS_NUM_THREADS: "1"
       # Run the full baseline episodes (skipped everywhere else).
       FLYCAR_BASELINE_EPISODES: "1"
       # Bump this to throw away the cached environment and rebuild it.
@@ -67,6 +73,7 @@ jobs:
           grep PRETTY_NAME /etc/os-release
           ldd --version | head -1
           grep -m1 "model name" /proc/cpuinfo
+          OPENBLAS_VERBOSE=2 python -c "import numpy as np; np.ones((50, 50)) @ np.ones((50, 50))"
           conda list -n flycar | grep -E "^(python|numpy|pychrono|libblas|mkl) "
 
       - name: Check the installation
