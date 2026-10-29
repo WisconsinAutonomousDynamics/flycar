@@ -144,6 +144,8 @@ class FlyCarVehicle:
         # ---- Control state ---------------------------------------------------
         self.inputs = veh.DriverInputs()   # what Chrono's vehicle reads each step
         self.applied_action = np.zeros(3, dtype=np.float32)
+        self.governor_scale = 1.0          # last throttle factor of the speed governor [0, 1]
+        self.terrain = None                # the ChTerrain seen in the last synchronize()
         self.max_rates = np.array(
             [
                 config["throttle_rate_per_s"],
@@ -173,7 +175,8 @@ class FlyCarVehicle:
         # pushing, so the car can still roll faster than this downhill.
         max_speed = self.config["max_speed_mps"]
         headroom = (max_speed - self.forward_speed()) / GOVERNOR_BAND_MPS
-        throttle = throttle * min(1.0, max(0.0, headroom))
+        self.governor_scale = min(1.0, max(0.0, headroom))
+        throttle = throttle * self.governor_scale
 
         self.inputs.m_throttle = throttle
         self.inputs.m_steering = steering
@@ -183,6 +186,7 @@ class FlyCarVehicle:
     def hold_brake(self):
         """Full brake, no throttle. Used while the car settles after a reset."""
         self.applied_action = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        self.governor_scale = 1.0
         self.inputs.m_throttle = 0.0
         self.inputs.m_steering = 0.0
         self.inputs.m_braking = 1.0
@@ -190,6 +194,7 @@ class FlyCarVehicle:
     def release_controls(self):
         """Forget the control history, so the first action starts from zero."""
         self.applied_action = np.zeros(3, dtype=np.float32)
+        self.governor_scale = 1.0
         self.inputs.m_throttle = 0.0
         self.inputs.m_steering = 0.0
         self.inputs.m_braking = 0.0
@@ -200,6 +205,7 @@ class FlyCarVehicle:
 
     def synchronize(self, time, terrain):
         """Phase 1: tell the vehicle the current time, inputs and terrain."""
+        self.terrain = terrain   # kept for extra_info(): tire forces are reported against it
         self.gator.Synchronize(time, self.inputs, terrain)
 
     def advance(self, step):
@@ -251,3 +257,47 @@ class FlyCarVehicle:
         forward_axis = self.rotation_matrix()[:, 0]
         yaw = math.atan2(forward_axis[1], forward_axis[0])
         return np.array([position[0], position[1], yaw])
+
+    # ------------------------------------------------------------------------
+    # Debug data (info["extras"]["vehicle"]["vehicle"]); not part of the API
+    # ------------------------------------------------------------------------
+
+    def extra_info(self):
+        """A look inside the car, as plain Python numbers.
+
+        wheels             : per wheel (front_left, front_right, rear_left, rear_right):
+            omega_radps    : wheel angular speed [rad/s], positive when rolling forwards
+            slip           : longitudinal slip [-], positive when driving harder than rolling
+            normal_force_n : vertical tire force [N]; the world z component, which is
+                             the normal force on flat ground. NaN before the first step,
+                             and with rigid tires (see below).
+        governor_scale     : throttle factor of the speed governor (1 = no cut, 0 = full cut)
+        engine_speed_radps : engine speed [rad/s] (NaN if the powertrain has no engine)
+        gear               : current transmission gear (0 if there is no transmission)
+        """
+        wheels = {}
+        for axle, axle_name in enumerate(("front", "rear")):
+            for side, side_name in ((veh.LEFT, "left"), (veh.RIGHT, "right")):
+                tire = self.vehicle.GetTire(axle, side)
+                # Rigid tires report a summed contact force that swings by orders of
+                # magnitude from step to step even with the car parked, so only the
+                # TMeasy force is worth showing. ("tire_model" arrives with task A3.)
+                if self.terrain is None or self.config.get("tire_model", "tmeasy") != "tmeasy":
+                    normal_force = math.nan
+                else:
+                    normal_force = float(tire.ReportTireForce(self.terrain).force.z)
+                wheels[f"{axle_name}_{side_name}"] = {
+                    # Chrono reports forward rolling as negative; flip it.
+                    "omega_radps": -float(self.vehicle.GetSpindleOmega(axle, side)),
+                    "slip": float(tire.GetLongitudinalSlip()),
+                    "normal_force_n": normal_force,
+                }
+
+        engine = self.vehicle.GetEngine()
+        transmission = self.vehicle.GetTransmission()
+        return {
+            "wheels": wheels,
+            "governor_scale": float(self.governor_scale),
+            "engine_speed_radps": float(engine.GetMotorSpeed()) if engine is not None else math.nan,
+            "gear": int(transmission.GetCurrentGear()) if transmission is not None else 0,
+        }

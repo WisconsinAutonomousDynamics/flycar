@@ -37,6 +37,26 @@ def test_actions_are_saturated_and_rate_limited(make_env):
     np.testing.assert_allclose(applied, [1.0, -1.0, 0.0], atol=1e-6)
 
 
+def test_extra_info_exposes_finite_wheel_and_powertrain_data(make_env):
+    env = make_env(small_scenario())
+    env.reset(seed=0)
+    for _ in range(50):
+        _, _, _, _, info = env.step([1.0, 0.0, 0.0])
+    extras = info["extras"]["vehicle"]["vehicle"]
+
+    assert set(extras["wheels"]) == {"front_left", "front_right", "rear_left", "rear_right"}
+    for wheel in extras["wheels"].values():
+        assert set(wheel) == {"omega_radps", "slip", "normal_force_n"}
+        assert all(math.isfinite(value) for value in wheel.values())
+        assert wheel["omega_radps"] > 0.0        # rolling forwards
+        assert wheel["normal_force_n"] > 0.0     # pressed onto the ground
+    total_load = sum(wheel["normal_force_n"] for wheel in extras["wheels"].values())
+    assert 5000.0 < total_load < 15000.0         # roughly the car's weight
+    assert 0.0 <= extras["governor_scale"] <= 1.0
+    assert math.isfinite(extras["engine_speed_radps"])
+    assert isinstance(extras["gear"], int)
+
+
 def test_positive_steering_turns_left_and_speed_is_governed(make_env):
     env = make_env(small_scenario(arena={"size_m": [60.0, 60.0], "walls": True}))
     env.reset(seed=0)
