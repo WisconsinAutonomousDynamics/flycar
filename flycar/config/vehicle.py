@@ -16,7 +16,7 @@ SECTIONS = {
         "steering_rate_per_s": 4.0,    # max change of the steering command per second
         "brake_rate_per_s": 10.0,      # max change of the brake command per second
         "tire_model": "tmeasy",        # tire model to use
-        "steering_gain": 1.0,          # multiplier for the steering command
+        "steering_gain": 1.0,          # steering multiplier; output is clamped to [-1, 1]
         "throttle_curve_exponent": 1.0,# default exponent for the throttle curve (1 = linear)
     },
     "spawn": {

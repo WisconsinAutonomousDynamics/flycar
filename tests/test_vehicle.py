@@ -124,6 +124,31 @@ def test_vehicle_tuning_defaults_preserve_the_current_behaviour():
     assert vehicle["throttle_curve_exponent"] == 1.0
 
 
+@pytest.mark.parametrize("gain", (1.0, 3.0))
+def test_steering_gain_accepts_values_above_one(gain):
+    scenario = load_scenario({"vehicle": {"steering_gain": gain}})
+
+    assert scenario["vehicle"]["steering_gain"] == gain
+
+
+def test_steering_gain_rejects_negative_values():
+    with pytest.raises(ScenarioError, match=r"vehicle\.steering_gain must be non-negative"):
+        load_scenario({"vehicle": {"steering_gain": -1.01}})
+
+
+def test_scaled_steering_is_clamped_before_reaching_chrono(make_env):
+    scenario = _empty_arena_vehicle_scenario(steering_gain=3.0, steering_rate_per_s=1000.0)
+    env = make_env(scenario)
+    env.reset(seed=0)
+
+    env.vehicle.set_action([0.0, 1.0, 0.0], CONTROL_PERIOD_S)
+    assert env.vehicle.inputs.m_steering == 1.0
+    env.vehicle.set_action([0.0, -1.0, 0.0], CONTROL_PERIOD_S)
+    assert env.vehicle.inputs.m_steering == -1.0
+    env.vehicle.set_action([0.0, 0.2, 0.0], CONTROL_PERIOD_S)
+    assert env.vehicle.inputs.m_steering == pytest.approx(0.6)
+
+
 # ----------------------------------------------------------------------------
 # Terrain
 # ----------------------------------------------------------------------------

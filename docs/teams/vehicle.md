@@ -65,7 +65,7 @@ python run.py --scenario scenarios/team_vehicle.yaml --driver braitenberg --dash
 vehicle:
   max_speed_mps: 2.0             # top speed governor
   steering_rate_per_s: 20.0      # how quickly the steering command can change
-  steering_gain: 10.0            # steering strength; larger values turn more sharply
+  steering_gain: 2.0             # steering multiplier; scaled command is clamped to [-1, 1]
   brake_rate_per_s: 20.0         # how quickly the brake command can increase
   throttle_curve_exponent: 0.125 # stronger throttle response at partial input
 ```
@@ -77,13 +77,18 @@ Measured with these settings in a headless, seed-0 empty arena at a fixed spawn
 
 | A1 measurement | Result |
 |---|---:|
-| Governed top speed | 1.99 m/s (mean over the final 2 s) |
-| 0–3 m/s time | Not reached; speed tops out at about 2.00 m/s. Reaches 1.90 m/s in 0.27 s. |
-| Braking distance | 0.65 m, from 1.96 m/s to 0.05 m/s or less |
-| Minimum turning radius | Not reliably measured at low speed: the path did not settle into a circle. A diagnostic circle fit gave 10.65 m at a mean 1.84 m/s, which does not meet the A1 low-speed condition. |
-| Steering step response | 0.01 s to the first sample at or above 90% of the final yaw-rate magnitude; the response overshoots. |
+| Governed top speed | 1.985 m/s (mean over the final 2 s) |
+| 0–3 m/s time | Not reached with the 2.0 m/s governor; reaches 1.90 m/s in 0.27 s. |
+| Braking distance | 0.649 m, from 1.985 m/s to 0.040 m/s (0.52 s) |
+| Minimum turning radius | 2.750 m at a mean 0.938 m/s, full steering; circle-fit radial RMS error 0.00034 m. For this low-speed test only, the speed governor was set to 1.0 m/s. |
+| Steering step response | 0.14 s to the first sample at or above 90% of the final yaw-rate magnitude (0.725 rad/s). |
 
-The 0–3 m/s test cannot complete with `max_speed_mps: 2.0`; its 0–1.9 m/s
-time is included as a useful substitute. The turning-radius and steering-response
-results should be revisited if the steering gain is tuned to produce a stable,
-low-speed turn.
+Measurements used the settings above in a headless, seed-0 `empty_arena` at a
+fixed spawn `(0, 0, 0)`, with a `200 m x 200 m` arena, walls disabled, and the
+`raycast` eye backend. Top speed was averaged over the final 2 s of a 12 s
+full-throttle run. Braking began at the resulting top speed and ended when
+speed fell to 0.05 m/s or less. The turning-radius run used the same settings
+except for a 1.0 m/s speed governor; the circle was fit to the final 8 s of a
+12 s full-throttle, full-steering run. Steering step response began after a
+straight full-throttle approach to governed speed; the final yaw rate is the
+mean of the last 0.5 s of the response.
