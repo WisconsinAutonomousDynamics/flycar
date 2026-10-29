@@ -44,6 +44,25 @@ terrain:
 Any other `terrain.type` is rejected with "not implemented yet" until you
 implement it in `flycar/config/vehicle.py` and `flycar/env/terrain.py`.
 
+## Debug data from the car (A2)
+
+`FlyCarVehicle.extra_info()` reports these every step in
+`info["extras"]["vehicle"]["vehicle"]`. They are debug data, not API: the
+names may change. Log them with `run.py --log-extras`.
+
+| Key | Meaning | Unit |
+|---|---|---|
+| `wheels.<front\|rear>_<left\|right>.omega_radps` | wheel speed, positive rolling forwards | rad/s |
+| `wheels.<...>.slip` | longitudinal slip, positive when driving harder than rolling | - |
+| `wheels.<...>.normal_force_n` | vertical tire force (NaN with rigid tires, whose report is not usable) | N |
+| `governor_scale` | throttle factor of the speed governor: 1 = no cut, 0 = full cut | - |
+| `engine_speed_radps` | engine speed | rad/s |
+| `gear` | current gear (the Gator stays in 1) | - |
+
+Example, cruising in `team_vehicle.yaml`: `governor_scale` 0.12, engine
+193 rad/s, front-left wheel 14.3 rad/s with slip ~0 and 1900 N. The four
+normal forces add up to the car's weight, about 8,900 N, at rest.
+
 ## Things to know
 
 - Do not change any default or the order in which Chrono bodies are created:
