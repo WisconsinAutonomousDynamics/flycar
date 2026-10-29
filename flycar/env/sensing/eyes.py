@@ -470,3 +470,170 @@ class SensorEyes:
     def raw_images(self):
         """The latest full-resolution RGB images (uint8), or None before the first frame."""
         return self._raw["left"], self._raw["right"]
+
+
+def save_eye_figure(env, path):
+    """Save both eye images, which pixels are in shadow, and the ray hits on a top-down map."""
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Patch
+
+    from flycar.tools.plotting import draw_arena
+
+    eyes = env.eyes
+    left, right = eyes.render()
+    rotation = env.vehicle.rotation_matrix()
+    position = env.vehicle.position()
+    lights = env.world.current_lights()
+    views = {}
+    for side, (mount, _) in eyes.mounts.items():
+        origin = position + rotation @ mount
+        directions = eyes.directions[side] @ rotation.T
+        distance, normal = eyes._cast_rays(origin, directions)
+        hit = np.isfinite(distance)
+        shadow = np.zeros(eyes.rows * eyes.cols, dtype=bool)
+        xy = np.full((eyes.rows * eyes.cols, 2), np.nan)
+        if hit.any():
+            points = origin + directions[hit] * distance[hit, None]
+            normals = normal[hit]
+            xy[hit, 0] = points[:, 0]
+            xy[hit, 1] = points[:, 1]
+            blocked = np.zeros(len(points), dtype=bool)
+            if eyes.shadows:
+                for light in lights:
+                    lamp = np.array([light["x"], light["y"], light["z"]])
+                    to_lamp = lamp - points
+                    lamp_distance = np.linalg.norm(to_lamp, axis=1)
+                    facing = np.clip(np.sum(normals * (to_lamp / lamp_distance[:, None]), axis=1), 0.0, 1.0)
+                    contribution = facing * light["intensity"] / (1.0 + (lamp_distance / light["falloff_m"]) ** 2)
+                    lifted = points + normals * SHADOW_OFFSET_M
+                    for index in np.nonzero(contribution > 1e-3)[0]:
+                        if eyes._ray_hits_something(lifted[index].tolist(), lamp.tolist()):
+                            blocked[index] = True
+            shadow[hit] = blocked
+        views[side] = {"xy": xy, "shadow": shadow.reshape(eyes.rows, eyes.cols)}
+
+    figure = Figure(figsize=(12, 6), dpi=100)
+    FigureCanvasAgg(figure)
+    grid = figure.add_gridspec(2, 3)
+    for column, image, side in ((0, left, "left"), (1, right, "right")):
+        eye_axis = figure.add_subplot(grid[0, column])
+        eye_axis.imshow(image, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
+        eye_axis.set_title(f"{side} eye")
+        eye_axis.set_axis_off()
+
+        shadow_axis = figure.add_subplot(grid[1, column])
+        shadow_axis.imshow(views[side]["shadow"], cmap="gray_r", vmin=0, vmax=1, interpolation="nearest")
+        shadow_axis.set_title(f"{side} eye, pixels in shadow")
+        shadow_axis.set_xticks([])
+        shadow_axis.set_yticks([])
+        shadow_axis.legend(
+            handles=[Patch(facecolor="black", edgecolor="gray", label="in shadow")],
+            loc="lower right", fontsize=7,
+        )
+
+    map_axis = figure.add_subplot(grid[:, 2])
+    draw_arena(map_axis, env.layout)
+    for side, color in (("left", "C0"), ("right", "C1")):
+        xy = views[side]["xy"]
+        hit = np.isfinite(xy[:, 0])
+        map_axis.plot(xy[hit, 0], xy[hit, 1], ".", color=color, markersize=3, label=f"{side} eye hits")
+    map_axis.set_title("ray hit points")
+    map_axis.legend(fontsize=7)
+    figure.tight_layout()
+    figure.savefig(path)
+    print(path)
+    return left, right
+
+
+def show_fly_eyes(left, right):
+    """Open a window with both eye images. Returns a function to keep that window alive."""
+    import matplotlib.pyplot as plt
+
+    plt.ion()
+    figure, axes = plt.subplots(1, 2, figsize=(6, 3.2))
+    for axis, image, title in ((axes[0], left, "left eye"), (axes[1], right, "right eye")):
+        axis.imshow(image, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
+        axis.set_title(title)
+        axis.set_axis_off()
+    figure.canvas.manager.set_window_title("What the fly sees")
+    figure.tight_layout()
+    figure.canvas.draw()
+    figure.canvas.flush_events()
+
+    def pump():
+        if plt.fignum_exists(figure.number):
+            figure.canvas.flush_events()
+
+    return pump
+
+# python -m flycar.env.sensing.eyes --x -5 --y 0 --yaw-deg 0 --eye right
+#
+# Runs this file. The car is parked at x = -5 m, y = 0 m, facing +x (yaw 0),
+# in scenarios/team_vision.yaml with seed 0. The eyes are the raycast backend.
+# It writes eyes_view.png: both eye images, which pixels are in shadow (black
+# in the bottom row), and the ray hit points on a top-down map. A pixel is in
+# shadow when something blocks the lamp from the spot it sees, so the lamp is
+# drawn on the map too. Then two windows open. The 3D
+# window looks through the right eye. The other window shows both eye pictures.
+# Close the 3D window to quit.
+
+if __name__ == "__main__":
+    import argparse
+
+    import pychrono.vehicle as veh
+
+    from flycar.env.core import FlyCarEnv
+    from flycar.env.scenario import load_scenario
+
+    parser = argparse.ArgumentParser(description="Park the car and look through one eye at the 3D arena.")
+    parser.add_argument("--scenario", default=str(Path(__file__).resolve().parents[3] / "scenarios" / "team_vision.yaml"))
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--x", type=float, required=True)
+    parser.add_argument("--y", type=float, required=True)
+    parser.add_argument("--yaw-deg", type=float, required=True)
+    parser.add_argument("--eye", choices=("left", "right"), default="left")
+    parser.add_argument("-o", "--output", default="eyes_view.png")
+    args = parser.parse_args()
+
+    os.environ[BACKEND_ENV_VAR] = "raycast"
+    scenario = load_scenario(args.scenario)
+    scenario["spawn"]["x"] = args.x
+    scenario["spawn"]["y"] = args.y
+    scenario["spawn"]["yaw_deg"] = args.yaw_deg
+    scenario["spawn"]["min_target_distance_m"] = 0.0
+    scenario["eyes"]["backend"] = "raycast"
+
+    env = FlyCarEnv(scenario, render_mode="human", eye_backend="raycast")
+    try:
+        env.reset(seed=args.seed)
+        left, right = save_eye_figure(env, args.output)
+        mount, yaw = env.eyes.mounts[args.eye]
+        rotation = env.vehicle.rotation_matrix()
+        origin = env.vehicle.position() + rotation @ mount
+        forward = rotation @ np.array([math.cos(yaw), math.sin(yaw), 0.0])
+        target = origin + forward * 20.0
+        position = chrono.ChVector3d(float(origin[0]), float(origin[1]), float(origin[2]))
+        look_at = chrono.ChVector3d(float(target[0]), float(target[1]), float(target[2]))
+
+        window = env.window
+        window.SetWindowTitle(f"Fly Car {args.eye} eye")
+        window.SetChaseCameraPosition(position, look_at)
+        window.SetChaseCameraState(veh.ChChaseCamera.Fixed)
+        camera = window.GetActiveCamera()
+        if camera is not None:
+            camera.setFOV(math.radians(scenario["eyes"]["fov_v_deg"]))
+
+        print(f"{args.eye} eye in the 3D window. The other window is what both eyes see. Close the 3D window to quit.")
+        pump_eyes = show_fly_eyes(left, right)
+        while window.Run():
+            window.SetChaseCameraPosition(position, look_at)
+            window.SetCameraPosition(position)
+            window.SetCameraTarget(look_at)
+            window.BeginScene()
+            window.Render()
+            window.EndScene()
+            pump_eyes()
+    finally:
+        env.close()
+
