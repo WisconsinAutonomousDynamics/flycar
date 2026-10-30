@@ -186,6 +186,54 @@ def _validate(scenario, where):
                 f"{where}: a {obstacle['shape']} obstacle needs {expected} numbers in size_m, got {obstacle['size_m']}."
             )
 
+    #Here is an attempt at A3: 
+    if obstacle["x"] + 1 > 20 or obstacle["x"] - 1 < -20 or obstacle["y"] + 1 > 20 or obstacle["y"] - 1 < -20: #since the arena is 40x40 and centered at the origin. 
+        raise ScenarioError(f"{where}: obstacle at ({obstacle['x']}, {obstacle['y']}) is out of bounds of the arena.")
+
+    if ambient := scenario["lighting"]["ambient"] < 0.0 or scenario["lighting"]["ambient"] > 1.0:
+        raise ScenarioError(f"{where}: lighting.ambient must be between 0 and 1, got {ambient}.")
+
+    if sky := scenario["lighting"]["sky"] < 0.0 or scenario["lighting"]["sky"] > 1.0:
+        raise ScenarioError(f"{where}: lighting.sky must be between 0 and 1, got {sky}.")   
+
+    if scenario["target"]["lamp"]["x"] > 20 or scenario["target"]["lamp"]["x"] < -20 or scenario["target"]["lamp"]["y"] >20 or scenario["target"]["lamp"]["y"] <-20: 
+        raise ScenarioError(f"{where}: target lamp at ({scenario['target']['lamp']['x']}, {scenario['target']['lamp']['y']}) is out of bounds of the arena.") 
+
+    target = [light for light in scenario["lights"] if light["target"]]
+    for obstacle in scenario["obstacles"]:
+      if abs(obstacle["x"] - target["x"]) < 1  and abs(obstacle["y"] - target["y"]) < 1:
+          raise ScenarioError(f"{where}: light at ({target['x']}, {target['y']}) is inside of an obstacle.")
+
+
+def obstacle_within_arena(): 
+    """Check if the obstacle is within the arena bounds."""
+    obstacle_out_of_arena = obstacle("cylinder", -30, -30, [1, 1, 1])
+    assert(obstacle_out_of_arena.validate() == False)
+                                         
+def light_is_valid(): 
+    """Check if the light is intiated with valid values."""
+    light_not_between_0_and_1 = light([0, 0], [0, 0], 1, -1, 1, true) 
+    assert(light_not_between_0_and_1.validate() == False) 
+
+def sky_is_valid(): 
+    """Check if the sky is intiated with valid values."""
+    sky_not_between_0_and_1 = sky(.5, 2) 
+    assert(sky_not_between_0_and_1.validate() == False) 
+
+def lamp_is_valid(): 
+    """Check if the lamp is out of bounds."""
+    lamp_out_of_bounds = lamp(-21, -21) 
+    assert(lamp_out_of_bounds.validate() == False) 
+
+def lamp_overlaps(): 
+    """Check if the lamp overlaps with another lamp."""
+    lamp_1 = lamp(1, 1) 
+    lamp_overlaps = lamp(1, 1) 
+    assert(lamp_overlaps.validate() == False) 
+
+
+
+
 
 def sample(value, rng):
     """Turn a scenario value into a number.

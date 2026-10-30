@@ -159,6 +159,36 @@ def sample_layout(scenario, rng):
         },
     }
 
+ 
+areaUsedUp = 0  #A3: built with the assumption that the cylinders are upright. It is assumed the obstacles do not overlap. 
+count_did_not_fit = 0 
+ for obstacle in scenario["obstacles"]: 
+      if len(obstacle["size_m"]) == 3: #The oject is a box occupying a projected area of x*y
+          areaUsedUp = areaUsedUp + obstacle["size_m"][0] * obstacle["size_m"][1]
+      else: #The object is a cylinder occupying a projected area of pi. 
+          areaUsedUp = areaUsedUp + math.pi * (obstacle["size_m"][0]) * (obstacle["size_m"][0]) #pi * r^2 
+      if areaUsedUp > 1600: 
+          count_did_not_fit = count_did_not_fit + 1 
+          raise ScenarioError(f"{where}: The test failed. Too many objects in the arena (count: {count_did_not_fit}).") 
+
+def check_sample_layout(scenario, rng):
+    """Check if there are too many obstacles in the arena."""
+    count = 0 
+    for i in range(-1, 21): 
+      for j in range(-1, 21):
+        obstacles = {
+        "shape": "box",
+        "size_m": [2.0, 2.0, 1.5] ,    # length, width, height
+        "x": [i],
+        "y": [j],
+        "yaw_deg": [0.0, 90.0]
+        }
+        scenario["obstacles"].append(obstacle)
+        count: count + 1 
+    if count == 1601: #There are too many obstacles and no exception was raised. 
+            raise ScenarioError(f"{where}: The test failed. Too many objects in the arena.")  
+  
+
 
 # ----------------------------------------------------------------------------
 # Step 2: build the Chrono bodies for a layout
