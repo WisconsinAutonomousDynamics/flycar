@@ -14,10 +14,11 @@ dashboard can draw the arena without importing pychrono. It is returned by
 
 import math
 
+from matplotlib.pylab import where
 import pychrono as chrono
 import pychrono.vehicle as veh
 
-from flycar.env.scenario import ScenarioError, sample
+from flycar.env.scenario import ScenarioError, load_scenario, sample
 
 # Wall and obstacle bodies get tags counting up from here. The contact sensor
 # uses the tag to tell "hit a wall or obstacle" apart from "touching the ground".
@@ -74,21 +75,36 @@ def sample_layout(scenario, rng):
     arena = scenario["arena"]
     size_x, size_y = arena["size_m"]
 
-    # ---- Lights -------------------------------------------------------------
+  # ---- Lights -------------------------------------------------------------
     lights = []
     target = None
     for spec in scenario["lights"]:
         light = {
-            "x": sample(spec["x"], rng),
-            "y": sample(spec["y"], rng),
-            "z": sample(spec["z"], rng),
-            "intensity": float(spec["intensity"]),
-            "falloff_m": float(spec["falloff_m"]),
-            "target": bool(spec["target"]),
-        }
+          "x": sample(spec["x"], rng),
+           "y": sample(spec["y"], rng),
+           "z": sample(spec["z"], rng),
+           "intensity": float(spec["intensity"]),
+           "falloff_m": float(spec["falloff_m"]),
+           "target": bool(spec["target"]),
+      }
         lights.append(light)
         if light["target"]:
             target = [light["x"], light["y"]]
+
+ # ---- Tester for A3 ---------------------------------------------------------
+    def test_lamp_overlaps(): 
+        """Check if the lamp overlaps with an obstacle."""
+        obstacle = {"shape": "box", "size_m": [2.0, 2.0, 1.5], "x": 0, "y": 0, "yaw_deg": 0}
+        lamp = {"x": 0, "y": 0, "target": True}
+        scenario = {"name": "test_lamp_overlaps_obstacle", "obstacles": [obstacle], "lights": [lamp]}
+
+        try: 
+            sample_layout((load_scenario), rng) 
+        except ScenarioError as e: 
+            assert "overlapping lamp and obstacle" in str(e) 
+        else: 
+            assert False, "Test failed: no exception raised for overlapping object locations."
+
 
     # ---- Spawn pose ---------------------------------------------------------
     spawn_spec = scenario["spawn"]
@@ -113,6 +129,21 @@ def sample_layout(scenario, rng):
             f"and at least {spawn_spec['min_target_distance_m']} m from the target. Check the 'spawn' ranges."
         )
 
+# ---- More A3, check if the arena is filled up ----------------------------------------------
+    areaUsedUp = 0  #A3: built with the assumption that the cylinders are upright. It is assumed the obstacles do not overlap. 
+    count_did_not_fit = 0 
+    for obstacle in scenario["obstacles"]: 
+      if len(obstacle["size_m"]) == 3: #The oject is a box occupying a projected area of x*y
+          areaUsedUp = areaUsedUp + obstacle["size_m"][0] * obstacle["size_m"][1]
+      else: #The object is a cylinder occupying a projected area of pi. 
+          areaUsedUp = areaUsedUp + math.pi * (obstacle["size_m"][0]) * (obstacle["size_m"][0]) #pi * r^2 
+      if areaUsedUp > 1600: 
+          count_did_not_fit = count_did_not_fit + 1 
+          
+    if count_did_not_fit > 0:
+      print(f"{count_did_not_fit}") 
+      raise ScenarioError("Too many obstacles")
+    
     # ---- Obstacles ----------------------------------------------------------
     obstacles = []
     for spec in scenario["obstacles"]:
@@ -141,6 +172,21 @@ def sample_layout(scenario, rng):
                 )
             obstacles.append(placed)
 
+    # ---- A3 check if lamp overlaps with obstacle  --------------------
+    # ---- A3 check if lamp overlaps with obstacle ----
+    if target is not None:
+        for obstacle in obstacles:
+            if obstacle["shape"] == "cylinder":
+                if math.hypot(
+                    obstacle["x"] - target[0],
+                    obstacle["y"] - target[1]
+                ) <= obstacle["size_m"][0]:
+                    raise ScenarioError("overlapping lamp and obstacle")
+            else:
+                if (abs(obstacle["x"] - target[0]) <= obstacle["size_m"][0] / 2
+                    and abs(obstacle["y"] - target[1]) <= obstacle["size_m"][1] / 2):
+                    raise ScenarioError("overlapping lamp and obstacle")
+
     return {
         "arena": {
             "size_m": [float(size_x), float(size_y)],
@@ -158,20 +204,9 @@ def sample_layout(scenario, rng):
             "sky": float(scenario["lighting"]["sky"]),
         },
     }
+                           
 
- 
-areaUsedUp = 0  #A3: built with the assumption that the cylinders are upright. It is assumed the obstacles do not overlap. 
-count_did_not_fit = 0 
- for obstacle in scenario["obstacles"]: 
-      if len(obstacle["size_m"]) == 3: #The oject is a box occupying a projected area of x*y
-          areaUsedUp = areaUsedUp + obstacle["size_m"][0] * obstacle["size_m"][1]
-      else: #The object is a cylinder occupying a projected area of pi. 
-          areaUsedUp = areaUsedUp + math.pi * (obstacle["size_m"][0]) * (obstacle["size_m"][0]) #pi * r^2 
-      if areaUsedUp > 1600: 
-          count_did_not_fit = count_did_not_fit + 1 
-          raise ScenarioError(f"{where}: The test failed. Too many objects in the arena (count: {count_did_not_fit}).") 
-
-def check_sample_layout(scenario, rng):
+def test_sample_layout(scenario, rng):
     """Check if there are too many obstacles in the arena."""
     count = 0 
     for i in range(-1, 21): 
@@ -183,11 +218,10 @@ def check_sample_layout(scenario, rng):
         "y": [j],
         "yaw_deg": [0.0, 90.0]
         }
-        scenario["obstacles"].append(obstacle)
-        count: count + 1 
-    if count == 1601: #There are too many obstacles and no exception was raised. 
-            raise ScenarioError(f"{where}: The test failed. Too many objects in the arena.")  
-  
+        scenario["obstacles"].append(obstacles)
+        count = count + 1 
+    with pytest.raises(ScenarioError, match="Too many obstacles"):
+        load_scenario(scenario)
 
 
 # ----------------------------------------------------------------------------
