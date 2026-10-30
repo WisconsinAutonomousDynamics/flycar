@@ -260,14 +260,17 @@ class FlyCarEnv(gymnasium.Env):
         # Chrono's default "up" is +y. Vehicles use z up, so gravity is -z.
         system.SetGravitationalAcceleration(chrono.ChVector3d(0.0, 0.0, -9.81))
 
-        # The same solver settings Chrono picks when a vehicle creates its own system.
+        # The same solver settings Chrono picks when a vehicle creates its own system
+        # (150 iterations by default; timing.max_solver_iterations trades accuracy for speed).
+        timing = self.scenario["timing"]
         system.SetSolverType(chrono.ChSolver.Type_BARZILAIBORWEIN)
-        system.GetSolver().AsIterative().SetMaxIterations(150)
+        system.GetSolver().AsIterative().SetMaxIterations(timing["max_solver_iterations"])
         system.SetMaxPenetrationRecoverySpeed(4.0)
 
-        # One thread: multi-threaded runs can add floating-point numbers in a
-        # different order from run to run, which breaks determinism.
-        system.SetNumThreads(1, 1, 1)
+        # One thread by default: multi-threaded runs can add floating-point
+        # numbers in a different order from run to run, which breaks determinism.
+        threads = timing["num_threads"]
+        system.SetNumThreads(threads, threads, threads)
         return system
 
     def _physics_step(self):

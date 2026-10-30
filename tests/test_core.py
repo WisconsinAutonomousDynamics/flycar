@@ -78,6 +78,43 @@ def test_control_period_is_configurable(make_env):
     assert info["time"] == pytest.approx(0.1)
 
 
+def test_solver_and_thread_defaults_are_todays_settings(make_env):
+    timing = load_scenario({})["timing"]
+    assert timing["max_solver_iterations"] == 150
+    assert timing["num_threads"] == 1
+
+    env = make_env(small_scenario())
+    env.reset(seed=0)
+    assert env.system.GetSolver().AsIterative().GetMaxIterations() == 150
+    threads = [env.system.GetNumThreadsChrono(), env.system.GetNumThreadsCollision(), env.system.GetNumThreadsEigen()]
+    assert threads == [1, 1, 1]
+
+
+def test_solver_iterations_and_threads_are_configurable(make_env):
+    env = make_env(small_scenario(timing={"max_solver_iterations": 40, "num_threads": 2}))
+    env.reset(seed=0)
+    assert env.system.GetSolver().AsIterative().GetMaxIterations() == 40
+    threads = [env.system.GetNumThreadsChrono(), env.system.GetNumThreadsCollision(), env.system.GetNumThreadsEigen()]
+    assert threads == [2, 2, 2]
+
+
+@pytest.mark.parametrize("key", ["max_solver_iterations", "num_threads"])
+@pytest.mark.parametrize("value", [0, -1, 1.5, True, "4"])
+def test_solver_iterations_and_threads_must_be_positive_whole_numbers(key, value):
+    with pytest.raises(ScenarioError, match=rf"timing\.{key}"):
+        load_scenario({"timing": {key: value}})
+
+
+def test_fast_single_threaded_settings_stay_deterministic(make_env):
+    """The A3 "fast batch" settings still give bit-for-bit identical runs."""
+    scenario = small_scenario(timing={"physics_step_s": 0.002, "max_solver_iterations": 50})
+    env = make_env(scenario)
+    poses_1 = _rollout(env, seed=3)[0]
+    poses_2 = _rollout(make_env(scenario), seed=3)[0]
+    np.testing.assert_array_equal(poses_1, poses_2)
+    assert np.linalg.norm(poses_1[-1, :2] - poses_1[0, :2]) > 1.0
+
+
 def test_control_period_must_be_a_multiple_of_the_physics_step():
     with pytest.raises(ScenarioError, match="multiple"):
         load_scenario({"timing": {"control_period_s": 0.01, "physics_step_s": 0.003}})

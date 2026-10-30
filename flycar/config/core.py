@@ -17,6 +17,8 @@ SECTIONS = {
     "timing": {
         "control_period_s": 0.01,  # one env.step() = this much simulated time
         "physics_step_s": 0.001,   # Chrono integration step (must divide the control period)
+        "max_solver_iterations": 150,  # iterations of the contact/joint solver per physics step
+        "num_threads": 1,          # Chrono, collision and Eigen threads; > 1 is NOT bit-for-bit reproducible
     },
     "contact": {
         "mode": "flag",          # flag: 0/1 touch flags. (Planned: force, in newtons.)
@@ -48,6 +50,11 @@ def validate(scenario, where):
         raise ScenarioError(
             f"{where}: control_period_s ({control}) must be a whole multiple of physics_step_s ({physics})."
         )
+    for key in ("max_solver_iterations", "num_threads"):
+        value = scenario["timing"][key]
+        # bool is a subclass of int, so "num_threads: true" would slip through.
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ScenarioError(f"{where}: timing.{key} must be a whole number >= 1, got {value!r}.")
 
     for section, defaults in NOT_YET_IMPLEMENTED.items():
         require_defaults(scenario[section], defaults, section, where)
