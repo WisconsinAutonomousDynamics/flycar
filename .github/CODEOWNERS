@@ -94,4 +94,5 @@
 /docs/API.md                        @WisconsinAutonomousDynamics/flycar-leads
 /pyproject.toml                     @WisconsinAutonomousDynamics/flycar-leads
 /environment.yml                    @WisconsinAutonomousDynamics/flycar-leads
+/environment-linux-64.lock           @WisconsinAutonomousDynamics/flycar-leads
 /.devcontainer/                     @WisconsinAutonomousDynamics/flycar-leads

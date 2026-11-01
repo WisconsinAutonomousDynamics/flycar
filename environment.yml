@@ -10,6 +10,10 @@
 # releases, and everybody on the team should be reading the same API.
 # PyChrono 10.0.0 is built for Python 3.12 and 3.13 on Windows, Linux and
 # Apple-silicon macOS. There is no Intel-Mac build: use the devcontainer there.
+#
+# CI on Linux installs the exact builds in environment-linux-64.lock instead, so
+# the recorded baseline episodes reproduce. If you change this file, regenerate
+# that one too (see its header).
 name: flycar
 channels:
   - projectchrono

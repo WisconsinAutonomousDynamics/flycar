@@ -175,12 +175,18 @@ def test_no_target_gives_nan_distance(make_env):
 def test_extras_collects_extra_info_by_team(make_env):
     env = make_env(small_scenario())
     _, info = env.reset(seed=0)
-    assert info["extras"] == {}               # nothing provides extra_info() yet
+    # Teams add their own extra_info() over time, so only check the shape here:
+    # team -> component -> dict.
+    for team, components in info["extras"].items():
+        assert isinstance(components, dict), team
+        assert all(isinstance(value, dict) for value in components.values()), team
 
+    # Check only the entries this test injects; other teams' entries may be there too.
     env.contact.extra_info = lambda: {"touches": 0}
     env.terrain.extra_info = lambda: {"patch": "flat"}
     _, _, _, _, info = env.step([0.0, 0.0, 0.0])
-    assert info["extras"] == {"core": {"contact": {"touches": 0}}, "vehicle": {"terrain": {"patch": "flat"}}}
+    assert info["extras"]["core"]["contact"] == {"touches": 0}
+    assert info["extras"]["vehicle"]["terrain"] == {"patch": "flat"}
 
 
 @pytest.mark.parametrize("settings, key", [

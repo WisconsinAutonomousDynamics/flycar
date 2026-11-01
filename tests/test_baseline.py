@@ -11,15 +11,20 @@ lead-approved ``api-change`` issue.)
   constants are fine; changed or removed ones are not.
 * ``test_maneuver_is_unchanged``: runs on every OS. A scripted drive must end
   up within a few centimetres of the recording.
-* ``test_baseline_episode_is_unchanged``: Linux only (CI runs it). Step counts
-  and end-of-episode flags must match exactly; every float to 1e-6 relative,
-  with a 1e-9 absolute floor for numbers that are essentially zero. Physics
-  on Windows and macOS differs in the last digits and the episodes drift.
+* ``test_baseline_episode_is_unchanged``: CI only. Step counts and
+  end-of-episode flags must match exactly; every float to 1e-6 relative,
+  with a 1e-9 absolute floor for numbers that are essentially zero. The last
+  digits of the physics depend on the OS, its glibc version and even the CPU,
+  and a closed-loop episode turns those into a different path. So the episodes
+  are recorded and checked on GitHub's machine under fixed conditions (see
+  .github/workflows/ci.yml and record-baseline.yml), and skipped unless
+  FLYCAR_BASELINE_EPISODES=1.
 """
 
 import importlib.util
 import json
 import math
+import os
 import sys
 
 import numpy as np
@@ -124,8 +129,8 @@ def test_maneuver_is_unchanged():
 
 
 @pytest.mark.skipif(
-    not sys.platform.startswith("linux"),
-    reason="full episodes only reproduce on the OS they were recorded on (Linux); CI runs them",
+    not sys.platform.startswith("linux") or os.environ.get("FLYCAR_BASELINE_EPISODES") != "1",
+    reason="full episodes only reproduce on CI's machine; CI runs them (FLYCAR_BASELINE_EPISODES=1)",
 )
 @pytest.mark.parametrize("run", record_baseline.BASELINE_RUNS, ids=lambda run: run[0])
 def test_baseline_episode_is_unchanged(run):

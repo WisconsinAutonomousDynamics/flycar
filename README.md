@@ -193,8 +193,8 @@ exactly `N` control periods, and that no driver imports `pychrono`.
 Each team has its own test file (`tests/test_vehicle.py`, `test_world.py`,
 `test_vision.py`, `test_core.py`, `test_tools.py`). `tests/test_baseline.py`
 replays recorded reference runs and fails if a change alters the default
-behaviour (on Windows and macOS it checks the settings and a short scripted
-drive; the full episodes only reproduce on Linux, so CI runs those);
+behaviour (locally it checks the settings and a short scripted drive; the
+full episodes only reproduce on GitHub's CI machine, so CI runs those);
 `tests/test_contracts.py` guards the frozen interfaces.
 
 If you change `flycar/env/spaces.py`, run `python scripts/gen_api_docs.py` to

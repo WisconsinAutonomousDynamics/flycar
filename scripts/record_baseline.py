@@ -26,9 +26,11 @@ centimetres (and a closed-loop episode into a different number of steps).
     differences stay at a few centimetres, while changing a default such as the
     ground friction or the top speed moves the car by tens of centimetres.
 
-``<episode>.npz`` (checked to 1e-6, on Linux only)
+``<episode>.npz`` (checked to 1e-6, in CI only)
     Full closed-loop reference episodes. These catch the smallest changes, but
-    only reproduce on the OS they were recorded on, so CI runs them.
+    only reproduce on the exact OS image and CPU settings they were recorded
+    with, so they are recorded and checked on GitHub's machine: run the
+    "record baseline" workflow (.github/workflows/record-baseline.yml).
 
 **Do not re-record to make a failing baseline test pass.** A failure means the
 code now behaves differently. Find out why. Only the project leads re-record,
