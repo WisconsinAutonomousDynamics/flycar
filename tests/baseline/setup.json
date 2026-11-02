@@ -1,0 +1,2078 @@
+{
+ "constants": {
+  "flycar.env.core": {
+   "RENDER_PERIOD_S": 0.02,
+   "SETTLE_TIME_S": 0.5
+  },
+  "flycar.env.sensing.contact": {
+   "BUMPER_X_MAX_M": 1.3,
+   "CHASSIS_TAG": 500,
+   "CONTACT_FRONT": 1,
+   "CONTACT_LEFT": 0,
+   "CONTACT_RIGHT": 2,
+   "FRONT_ZONE_DEPTH_M": 0.25,
+   "WORLD_TAG_BASE": 1000
+  },
+  "flycar.env.sensing.eyes": {
+   "ALBEDO": 0.5,
+   "BACKEND_ENV_VAR": "FLYCAR_EYE_BACKEND",
+   "LAMP_RADIUS_M": 0.4,
+   "SHADOW_OFFSET_M": 0.02
+  },
+  "flycar.env.terrain": {
+   "TERRAIN_RESTITUTION": 0.01
+  },
+  "flycar.env.vehicle": {
+   "BRAKE": 2,
+   "BUMPER_HEIGHT_M": 0.5,
+   "BUMPER_WIDTH_M": 1.5,
+   "BUMPER_X_MAX_M": 1.3,
+   "BUMPER_X_MIN_M": -2.2,
+   "CHASSIS_TAG": 500,
+   "GOVERNOR_BAND_MPS": 0.5,
+   "RIDE_HEIGHT_M": 0.275,
+   "STEERING": 1,
+   "THROTTLE": 0
+  },
+  "flycar.env.world": {
+   "LAMP_RADIUS_M": 0.4,
+   "MAX_SAMPLING_TRIES": 200,
+   "SPAWN_WALL_MARGIN_M": 3.0,
+   "WORLD_TAG_BASE": 1000
+  }
+ },
+ "defaults": {
+  "arena": {
+   "size_m": [
+    40.0,
+    40.0
+   ],
+   "wall_height_m": 1.5,
+   "wall_thickness_m": 0.5,
+   "walls": true
+  },
+  "contact": {
+   "mode": "flag"
+  },
+  "description": "",
+  "episode": {
+   "max_time_s": 30.0,
+   "success_radius_m": 2.0
+  },
+  "eyes": {
+   "backend": "auto",
+   "camera_width_px": 240,
+   "fov_h_deg": 120.0,
+   "fov_v_deg": 60.0,
+   "max_range_m": 80.0,
+   "motion_blur": false,
+   "mount_m": [
+    1.0,
+    0.3,
+    0.75
+   ],
+   "noise_std": 0.0,
+   "resolution": [
+    20,
+    20
+   ],
+   "shadows": true,
+   "update_period_s": 0.02,
+   "yaw_offset_deg": 50.0
+  },
+  "lighting": {
+   "ambient": 0.3,
+   "sky": 0.2
+  },
+  "lights": [],
+  "motion": {
+   "lights": [],
+   "obstacles": []
+  },
+  "name": "unnamed",
+  "obstacles": [],
+  "spawn": {
+   "min_target_distance_m": 0.0,
+   "x": 0.0,
+   "y": 0.0,
+   "yaw_deg": 0.0
+  },
+  "termination": {
+   "flipped": false,
+   "left_arena": false,
+   "stuck_s": null
+  },
+  "terrain": {
+   "friction": 0.9,
+   "type": "rigid_flat"
+  },
+  "timing": {
+   "control_period_s": 0.01,
+   "physics_step_s": 0.001
+  },
+  "vehicle": {
+   "brake_rate_per_s": 10.0,
+   "max_speed_mps": 4.0,
+   "steering_rate_per_s": 4.0,
+   "throttle_rate_per_s": 4.0
+  }
+ },
+ "item_defaults": {
+  "lights": {
+   "falloff_m": 6.0,
+   "intensity": 1.0,
+   "target": false,
+   "x": 0.0,
+   "y": 0.0,
+   "z": 1.5
+  },
+  "obstacles": {
+   "clearance_m": 4.0,
+   "count": 1,
+   "shape": "box",
+   "size_m": [
+    2.0,
+    2.0,
+    1.5
+   ],
+   "x": 0.0,
+   "y": 0.0,
+   "yaw_deg": 0.0
+  }
+ },
+ "scenarios": {
+  "scenarios/empty_arena.yaml": {
+   "chrono": {
+    "bodies": [
+     {
+      "collision": true,
+      "fixed": false,
+      "inertia_xx": [
+       107.7,
+       350.8,
+       457.7
+      ],
+      "mass": 800.0,
+      "name": "Chassis body",
+      "shapes": [
+       {
+        "friction": 0.5,
+        "restitution": 0.0,
+        "type": 2
+       }
+      ],
+      "tag": 500
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.138,
+       0.05,
+       0.138
+      ],
+      "mass": 2.0,
+      "name": "Steering_link",
+      "tag": 60930
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.499,
+       0.8378,
+       0.499
+      ],
+      "mass": 23.3,
+      "name": "FrontSusp_spindle_L",
+      "tag": 60932
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.499,
+       0.8378,
+       0.499
+      ],
+      "mass": 23.3,
+      "name": "FrontSusp_spindle_R",
+      "tag": 60932
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0138,
+       0.0146,
+       0.00283
+      ],
+      "mass": 1.5,
+      "name": "FrontSusp_upright_L",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0151,
+       0.0207,
+       0.0355
+      ],
+      "mass": 4.0,
+      "name": "FrontSusp_arm_L",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0138,
+       0.0146,
+       0.00283
+      ],
+      "mass": 1.5,
+      "name": "FrontSusp_upright_R",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0151,
+       0.0207,
+       0.0355
+      ],
+      "mass": 4.0,
+      "name": "FrontSusp_arm_R",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.498478,
+       0.8364959999999999,
+       0.498478
+      ],
+      "mass": 23.3,
+      "name": "RearSusp_spindle_L",
+      "tag": 60932
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.498478,
+       0.8364959999999999,
+       0.498478
+      ],
+      "mass": 23.3,
+      "name": "RearSusp_spindle_R",
+      "tag": 60932
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "mass": 1.0,
+      "name": "patch_1",
+      "position": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": -1
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       4005625.0,
+       6250.0,
+       4000625.0
+      ],
+      "mass": 30000.0,
+      "position": [
+       20.25,
+       0.0,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1000
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       4005625.0,
+       6250.0,
+       4000625.0
+      ],
+      "mass": 30000.0,
+      "position": [
+       -20.25,
+       0.0,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1001
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       6406.25,
+       4313328.125,
+       4308203.125
+      ],
+      "mass": 30750.0,
+      "position": [
+       0.0,
+       20.25,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1002
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       6406.25,
+       4313328.125,
+       4308203.125
+      ],
+      "mass": 30750.0,
+      "position": [
+       0.0,
+       -20.25,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1003
+     }
+    ],
+    "eye_every": 2,
+    "gravity": [
+     0.0,
+     0.0,
+     -9.81
+    ],
+    "n_links": 14,
+    "n_other_items": 11,
+    "n_shafts": 6,
+    "solver_max_iterations": 150,
+    "solver_type": 4,
+    "substeps": 10,
+    "threads": [
+     1,
+     1,
+     1
+    ],
+    "timestepper_type": 7,
+    "vehicle": {
+     "mass": 906.1999999999998,
+     "max_steering_angle": 0.4363323129985824,
+     "min_turning_radius": 7.6,
+     "tires": [
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.254
+      },
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.254
+      },
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.3048
+      },
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.3048
+      }
+     ],
+     "wheelbase": 2.776,
+     "wheeltrack": [
+      1.12,
+      1.24
+     ]
+    }
+   },
+   "layouts": {
+    "0": {
+     "arena": {
+      "size_m": [
+       40.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.6,
+      "sky": 0.8
+     },
+     "lights": [],
+     "obstacles": [],
+     "spawn": [
+      1.369616873214543,
+      -2.302132862361297,
+      -2.8841484100105235
+     ],
+     "target": null,
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "1": {
+     "arena": {
+      "size_m": [
+       40.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.6,
+      "sky": 0.8
+     },
+     "lights": [],
+     "obstacles": [],
+     "spawn": [
+      0.11821624700256717,
+      4.504636963259353,
+      -2.2358110930610913
+     ],
+     "target": null,
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "2": {
+     "arena": {
+      "size_m": [
+       40.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.6,
+      "sky": 0.8
+     },
+     "lights": [],
+     "obstacles": [],
+     "spawn": [
+      -2.383878657506836,
+      -2.015088565858767,
+      1.9743385564396063
+     ],
+     "target": null,
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "3": {
+     "arena": {
+      "size_m": [
+       40.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.6,
+      "sky": 0.8
+     },
+     "lights": [],
+     "obstacles": [],
+     "spawn": [
+      -4.143508328563756,
+      -2.631894934039003,
+      1.8929632932132205
+     ],
+     "target": null,
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "4": {
+     "arena": {
+      "size_m": [
+       40.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.6,
+      "sky": 0.8
+     },
+     "lights": [],
+     "obstacles": [],
+     "spawn": [
+      4.430561055723675,
+      0.11327552814361574,
+      2.9923274543394056
+     ],
+     "target": null,
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -20.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        41.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    }
+   },
+   "scenario": {
+    "arena": {
+     "size_m": [
+      40.0,
+      40.0
+     ],
+     "wall_height_m": 1.5,
+     "wall_thickness_m": 0.5,
+     "walls": true
+    },
+    "contact": {
+     "mode": "flag"
+    },
+    "description": "Empty daylit arena with walls. No target.",
+    "episode": {
+     "max_time_s": 20.0,
+     "success_radius_m": 2.0
+    },
+    "eyes": {
+     "backend": "auto",
+     "camera_width_px": 240,
+     "fov_h_deg": 120.0,
+     "fov_v_deg": 60.0,
+     "max_range_m": 80.0,
+     "motion_blur": false,
+     "mount_m": [
+      1.0,
+      0.3,
+      0.75
+     ],
+     "noise_std": 0.0,
+     "resolution": [
+      20,
+      20
+     ],
+     "shadows": true,
+     "update_period_s": 0.02,
+     "yaw_offset_deg": 50.0
+    },
+    "lighting": {
+     "ambient": 0.6,
+     "sky": 0.8
+    },
+    "lights": [],
+    "motion": {
+     "lights": [],
+     "obstacles": []
+    },
+    "name": "empty_arena",
+    "obstacles": [],
+    "spawn": {
+     "min_target_distance_m": 0.0,
+     "x": [
+      -5.0,
+      5.0
+     ],
+     "y": [
+      -5.0,
+      5.0
+     ],
+     "yaw_deg": [
+      -180.0,
+      180.0
+     ]
+    },
+    "termination": {
+     "flipped": false,
+     "left_arena": false,
+     "stuck_s": null
+    },
+    "terrain": {
+     "friction": 0.9,
+     "type": "rigid_flat"
+    },
+    "timing": {
+     "control_period_s": 0.01,
+     "physics_step_s": 0.001
+    },
+    "vehicle": {
+     "brake_rate_per_s": 10.0,
+     "max_speed_mps": 4.0,
+     "steering_rate_per_s": 4.0,
+     "throttle_rate_per_s": 4.0
+    }
+   }
+  },
+  "scenarios/light_seek.yaml": {
+   "chrono": {
+    "bodies": [
+     {
+      "collision": true,
+      "fixed": false,
+      "inertia_xx": [
+       107.7,
+       350.8,
+       457.7
+      ],
+      "mass": 800.0,
+      "name": "Chassis body",
+      "shapes": [
+       {
+        "friction": 0.5,
+        "restitution": 0.0,
+        "type": 2
+       }
+      ],
+      "tag": 500
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.138,
+       0.05,
+       0.138
+      ],
+      "mass": 2.0,
+      "name": "Steering_link",
+      "tag": 60930
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.499,
+       0.8378,
+       0.499
+      ],
+      "mass": 23.3,
+      "name": "FrontSusp_spindle_L",
+      "tag": 60932
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.499,
+       0.8378,
+       0.499
+      ],
+      "mass": 23.3,
+      "name": "FrontSusp_spindle_R",
+      "tag": 60932
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0138,
+       0.0146,
+       0.00283
+      ],
+      "mass": 1.5,
+      "name": "FrontSusp_upright_L",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0151,
+       0.0207,
+       0.0355
+      ],
+      "mass": 4.0,
+      "name": "FrontSusp_arm_L",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0138,
+       0.0146,
+       0.00283
+      ],
+      "mass": 1.5,
+      "name": "FrontSusp_upright_R",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.0151,
+       0.0207,
+       0.0355
+      ],
+      "mass": 4.0,
+      "name": "FrontSusp_arm_R",
+      "tag": 60929
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.498478,
+       0.8364959999999999,
+       0.498478
+      ],
+      "mass": 23.3,
+      "name": "RearSusp_spindle_L",
+      "tag": 60932
+     },
+     {
+      "collision": false,
+      "fixed": false,
+      "inertia_xx": [
+       0.498478,
+       0.8364959999999999,
+       0.498478
+      ],
+      "mass": 23.3,
+      "name": "RearSusp_spindle_R",
+      "tag": 60932
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "mass": 1.0,
+      "name": "patch_1",
+      "position": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": -1
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       4005625.0,
+       6250.0,
+       4000625.0
+      ],
+      "mass": 30000.0,
+      "position": [
+       25.25,
+       0.0,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1000
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       4005625.0,
+       6250.0,
+       4000625.0
+      ],
+      "mass": 30000.0,
+      "position": [
+       -25.25,
+       0.0,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1001
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       7968.75,
+       8297859.375,
+       8291484.375
+      ],
+      "mass": 38250.0,
+      "position": [
+       0.0,
+       20.25,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1002
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       7968.75,
+       8297859.375,
+       8291484.375
+      ],
+      "mass": 38250.0,
+      "position": [
+       0.0,
+       -20.25,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1003
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       3125.0,
+       3125.0,
+       4000.0
+      ],
+      "mass": 6000.0,
+      "position": [
+       2.95306692733266,
+       3.1990732730153972,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1004
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       3125.0,
+       3125.0,
+       4000.0
+      ],
+      "mass": 6000.0,
+      "position": [
+       -1.476500102414926,
+       13.052172713633048,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 2
+       }
+      ],
+      "tag": 1005
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       1048.0353092375549,
+       1048.0353092375549,
+       965.0972631827847
+      ],
+      "mass": 3015.9289474462016,
+      "position": [
+       -7.967137997958223,
+       10.72212829762708,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 4
+       }
+      ],
+      "tag": 1006
+     },
+     {
+      "collision": true,
+      "fixed": true,
+      "inertia_xx": [
+       1048.0353092375549,
+       1048.0353092375549,
+       965.0972631827847
+      ],
+      "mass": 3015.9289474462016,
+      "position": [
+       -7.596973096334428,
+       6.889663392898321,
+       0.75
+      ],
+      "shapes": [
+       {
+        "friction": 0.8999999761581421,
+        "restitution": 0.009999999776482582,
+        "type": 4
+       }
+      ],
+      "tag": 1007
+     }
+    ],
+    "eye_every": 2,
+    "gravity": [
+     0.0,
+     0.0,
+     -9.81
+    ],
+    "n_links": 14,
+    "n_other_items": 11,
+    "n_shafts": 6,
+    "solver_max_iterations": 150,
+    "solver_type": 4,
+    "substeps": 10,
+    "threads": [
+     1,
+     1,
+     1
+    ],
+    "timestepper_type": 7,
+    "vehicle": {
+     "mass": 906.1999999999998,
+     "max_steering_angle": 0.4363323129985824,
+     "min_turning_radius": 7.6,
+     "tires": [
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.254
+      },
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.254
+      },
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.3048
+      },
+      {
+       "inertia": [
+        0.258,
+        0.416,
+        0.258
+       ],
+       "mass": 9.3,
+       "model": "TMeasyTire",
+       "step": 0.001,
+       "width": 0.3048
+      }
+     ],
+     "wheelbase": 2.776,
+     "wheeltrack": [
+      1.12,
+      1.24
+     ]
+    }
+   },
+   "layouts": {
+    "0": {
+     "arena": {
+      "size_m": [
+       50.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.08,
+      "sky": 0.04
+     },
+     "lights": [
+      {
+       "falloff_m": 6.0,
+       "intensity": 1.0,
+       "target": true,
+       "x": 15.643540247857452,
+       "y": -6.445972014611631,
+       "z": 1.5
+      }
+     ],
+     "obstacles": [
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": 2.95306692733266,
+       "y": 3.1990732730153972,
+       "yaw": 1.1458905184031738
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": -1.476500102414926,
+       "y": 13.052172713633048,
+       "yaw": 1.281539766016664
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": -7.967137997958223,
+       "y": 10.72212829762708,
+       "yaw": 0.0
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": -7.596973096334428,
+       "y": 6.889663392898321,
+       "yaw": 0.0
+      }
+     ],
+     "spawn": [
+      -19.754158856382833,
+      -11.603336747315302,
+      0.6561116547065953
+     ],
+     "target": [
+      15.643540247857452,
+      -6.445972014611631
+     ],
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "1": {
+     "arena": {
+      "size_m": [
+       50.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.08,
+      "sky": 0.04
+     },
+     "lights": [
+      {
+       "falloff_m": 6.0,
+       "intensity": 1.0,
+       "target": true,
+       "x": 14.14185949640308,
+       "y": 12.612983497126187,
+       "z": 1.5
+      }
+     ],
+     "obstacles": [
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": -2.920082612329092,
+       "y": 9.831077814613252,
+       "yaw": 0.6427685003363225
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": -1.4048757479232865,
+       "y": -14.173226602707949,
+       "yaw": 1.18361562329819
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": -1.5422802413686618,
+       "y": -5.108048505027234,
+       "yaw": 0.0
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": 1.4611444411408527,
+       "y": -5.90415512125065,
+       "yaw": 0.0
+      }
+     ],
+     "spawn": [
+      -19.135042323682196,
+      10.767586731293854,
+      -0.3940992853336783
+     ],
+     "target": [
+      14.14185949640308,
+      12.612983497126187
+     ],
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "2": {
+     "arena": {
+      "size_m": [
+       50.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.08,
+      "sky": 0.04
+     },
+     "lights": [
+      {
+       "falloff_m": 6.0,
+       "intensity": 1.0,
+       "target": true,
+       "x": 11.139345610991796,
+       "y": -5.642247984404548,
+       "z": 1.5
+      }
+     ],
+     "obstacles": [
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": 0.7427263217415359,
+       "y": -9.362967799001897,
+       "yaw": 0.08662411964991056
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": -4.700367585127543,
+       "y": 4.722990446267776,
+       "yaw": 0.8832048377783943
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": -6.199252840335967,
+       "y": -2.0210762758563856,
+       "yaw": 0.0
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": 0.031567582894243884,
+       "y": -2.3164598018961655,
+       "yaw": 0.0
+      }
+     ],
+     "spawn": [
+      -15.114645556434319,
+      -9.794017388757673,
+      0.20965005132944856
+     ],
+     "target": [
+      11.139345610991796,
+      -5.642247984404548
+     ],
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "3": {
+     "arena": {
+      "size_m": [
+       50.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.08,
+      "sky": 0.04
+     },
+     "lights": [
+      {
+       "falloff_m": 6.0,
+       "intensity": 1.0,
+       "target": true,
+       "x": 9.027790005723492,
+       "y": -7.369305815309208,
+       "z": 1.5
+      }
+     ],
+     "obstacles": [
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": -2.802476717162314,
+       "y": -0.628461055774979,
+       "yaw": 0.25091730035812654
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": 0.8149258169105735,
+       "y": -11.589839402357898,
+       "yaw": 0.6145398045692
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": -1.7991178085436363,
+       "y": -2.0811593875746652,
+       "yaw": 0.0
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": -0.9584171427423112,
+       "y": 7.1351336187648045,
+       "yaw": 0.0
+      }
+     ],
+     "spawn": [
+      -15.192353208761618,
+      1.9718888655448268,
+      -0.8500549838933844
+     ],
+     "target": [
+      9.027790005723492,
+      -7.369305815309208
+     ],
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    },
+    "4": {
+     "arena": {
+      "size_m": [
+       50.0,
+       40.0
+      ],
+      "wall_height_m": 1.5,
+      "wall_thickness_m": 0.5,
+      "walls": true
+     },
+     "lighting": {
+      "ambient": 0.08,
+      "sky": 0.04
+     },
+     "lights": [
+      {
+       "falloff_m": 6.0,
+       "intensity": 1.0,
+       "target": true,
+       "x": 19.316673266868413,
+       "y": 0.31717147880212515,
+       "z": 1.5
+      }
+     ],
+     "obstacles": [
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": -3.4821609874727297,
+       "y": 9.057036209574218,
+       "yaw": 0.27414765252257495
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        2.0,
+        2.0,
+        1.5
+       ],
+       "x": 2.4596232902518764,
+       "y": 1.318242022904947,
+       "yaw": 1.4171961331968395
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": -2.274157713929524,
+       "y": -2.085111668117607,
+       "yaw": 0.0
+      },
+      {
+       "shape": "cylinder",
+       "size_m": [
+        0.8,
+        1.5
+       ],
+       "x": 1.4673606105319532,
+       "y": 14.524589997933642,
+       "yaw": 0.0
+      }
+     ],
+     "spawn": [
+      -14.142537765753776,
+      -10.059935426505547,
+      0.22484552874373678
+     ],
+     "target": [
+      19.316673266868413,
+      0.31717147880212515
+     ],
+     "walls": [
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": 25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        0.5,
+        40.0,
+        1.5
+       ],
+       "x": -25.25,
+       "y": 0.0,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": 20.25,
+       "yaw": 0.0
+      },
+      {
+       "shape": "box",
+       "size_m": [
+        51.0,
+        0.5,
+        1.5
+       ],
+       "x": 0.0,
+       "y": -20.25,
+       "yaw": 0.0
+      }
+     ]
+    }
+   },
+   "scenario": {
+    "arena": {
+     "size_m": [
+      50.0,
+      40.0
+     ],
+     "wall_height_m": 1.5,
+     "wall_thickness_m": 0.5,
+     "walls": true
+    },
+    "contact": {
+     "mode": "flag"
+    },
+    "description": "Night-time arena. Reach the lamp. Randomized lamp, spawn and obstacles.",
+    "episode": {
+     "max_time_s": 40.0,
+     "success_radius_m": 2.5
+    },
+    "eyes": {
+     "backend": "auto",
+     "camera_width_px": 240,
+     "fov_h_deg": 120.0,
+     "fov_v_deg": 60.0,
+     "max_range_m": 80.0,
+     "motion_blur": false,
+     "mount_m": [
+      1.0,
+      0.3,
+      0.75
+     ],
+     "noise_std": 0.0,
+     "resolution": [
+      20,
+      20
+     ],
+     "shadows": true,
+     "update_period_s": 0.02,
+     "yaw_offset_deg": 50.0
+    },
+    "lighting": {
+     "ambient": 0.08,
+     "sky": 0.04
+    },
+    "lights": [
+     {
+      "falloff_m": 6.0,
+      "intensity": 1.0,
+      "target": true,
+      "x": [
+       8.0,
+       20.0
+      ],
+      "y": [
+       -14.0,
+       14.0
+      ],
+      "z": 1.5
+     }
+    ],
+    "motion": {
+     "lights": [],
+     "obstacles": []
+    },
+    "name": "light_seek",
+    "obstacles": [
+     {
+      "clearance_m": 4.0,
+      "count": 2,
+      "shape": "box",
+      "size_m": [
+       2.0,
+       2.0,
+       1.5
+      ],
+      "x": [
+       -8.0,
+       4.0
+      ],
+      "y": [
+       -15.0,
+       15.0
+      ],
+      "yaw_deg": [
+       0.0,
+       90.0
+      ]
+     },
+     {
+      "clearance_m": 4.0,
+      "count": 2,
+      "shape": "cylinder",
+      "size_m": [
+       0.8,
+       1.5
+      ],
+      "x": [
+       -8.0,
+       4.0
+      ],
+      "y": [
+       -15.0,
+       15.0
+      ],
+      "yaw_deg": 0.0
+     }
+    ],
+    "spawn": {
+     "min_target_distance_m": 20.0,
+     "x": [
+      -20.0,
+      -14.0
+     ],
+     "y": [
+      -12.0,
+      12.0
+     ],
+     "yaw_deg": [
+      -60.0,
+      60.0
+     ]
+    },
+    "termination": {
+     "flipped": false,
+     "left_arena": false,
+     "stuck_s": null
+    },
+    "terrain": {
+     "friction": 0.9,
+     "type": "rigid_flat"
+    },
+    "timing": {
+     "control_period_s": 0.01,
+     "physics_step_s": 0.001
+    },
+    "vehicle": {
+     "brake_rate_per_s": 10.0,
+     "max_speed_mps": 4.0,
+     "steering_rate_per_s": 4.0,
+     "throttle_rate_per_s": 4.0
+    }
+   }
+  }
+ }
+}

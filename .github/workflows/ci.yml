@@ -2,15 +2,33 @@
 #
 # Headless, with the CPU eye backend forced (FLYCAR_EYE_BACKEND=raycast), so the
 # results do not depend on whether the runner has a GPU. The conda environment
-# is cached and only rebuilt when environment.yml changes.
+# is cached and only rebuilt when its spec file changes.
+#
+# The Linux job also runs the full baseline episodes, which must match the
+# recording bit for bit (issue #12). Four things make that possible:
+#   * exact packages from environment-linux-64.lock, not a fresh solve;
+#   * a fixed OS image (ubuntu-24.04, not ubuntu-latest), so glibc's math
+#     library is always the same version;
+#   * GLIBC_TUNABLES, which hides AVX/FMA/AVX-512 from glibc so its math
+#     functions (sin, exp, ...) take the same code path on every CPU. GitHub
+#     runners are a mix of CPUs, and those paths round the last digit differently.
+#   * OPENBLAS_CORETYPE, which does the same for NumPy's matrix library
+#     (the eyes use it, and the Braitenberg driver steers from the eyes).
+# The episodes are recorded under the same conditions by record-baseline.yml.
+# Windows and macOS use environment.yml and skip the full episodes.
+#
+# workflow_dispatch: run it by hand on any branch (Actions tab -> tests -> Run workflow),
+# for example to re-check main.
 name: tests
 
 on:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    # Keep in sync with record-baseline.yml.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     defaults:
       run:
@@ -19,7 +37,67 @@ jobs:
     env:
       FLYCAR_EYE_BACKEND: raycast
       MPLBACKEND: Agg
+      # Same math code path on every CPU (see the top of this file).
+      GLIBC_TUNABLES: glibc.cpu.hwcaps=-AVX,-AVX2,-FMA,-FMA4,-AVX512F,-AVX512DQ,-AVX512VL,-AVX512BW,-AVX512CD
+      # NumPy's matrix library picks its kernels from the CPU too; fix them
+      # (Haswell = AVX2, which every GitHub x64 runner has) and use one thread.
+      OPENBLAS_CORETYPE: Haswell
+      OPENBLAS_NUM_THREADS: "1"
+      # Run the full baseline episodes (skipped everywhere else).
+      FLYCAR_BASELINE_EPISODES: "1"
       # Bump this to throw away the cached environment and rebuild it.
+      CACHE_NUMBER: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: flycar
+
+      - name: Restore the cached conda environment
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CONDA }}/envs
+          key: conda-${{ runner.os }}-${{ hashFiles('environment-linux-64.lock') }}-${{ env.CACHE_NUMBER }}
+
+      - name: Install the exact packages from environment-linux-64.lock
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: conda install --yes -n flycar --file environment-linux-64.lock
+
+      - name: Show the machine and the installed versions
+        run: |
+          grep PRETTY_NAME /etc/os-release
+          ldd --version | head -1
+          grep -m1 "model name" /proc/cpuinfo
+          OPENBLAS_VERBOSE=2 python -c "import numpy as np; np.ones((50, 50)) @ np.ones((50, 50))"
+          conda list -n flycar | grep -E "^(python|numpy|pychrono|libblas|mkl) "
+
+      - name: Check the installation
+        run: python scripts/check_env.py
+
+      - name: Run the tests
+        run: pytest
+
+  # The same suite on Windows and macOS (Apple silicon), where most of the team
+  # works. The full baseline episodes skip themselves there (they only
+  # reproduce on Linux); the setup and maneuver checks run everywhere.
+  pytest-other-os:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      FLYCAR_EYE_BACKEND: raycast
+      MPLBACKEND: Agg
       CACHE_NUMBER: 0
 
     steps:
@@ -36,7 +114,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CONDA }}/envs
-          key: conda-${{ runner.os }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
+          key: conda-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
 
       - name: Create the conda environment from environment.yml
         if: steps.cache.outputs.cache-hit != 'true'
