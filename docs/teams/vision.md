@@ -49,6 +49,33 @@ Any other value is rejected with "not implemented yet" until you implement it.
 - To expose debug data (say, ray timings), add `extra_info()` to the eyes
   class; it shows up in `info["extras"]["vision"]`.
 
+## Performance measurements
+
+CPU raycast optimization, measured with `scenarios/light_seek.yaml` at 20×20.
+Each result is 200 fixed-pose renders after 20 warm-up renders. “Before” is
+`origin/main`; “after” is this implementation. Values are wall-clock ms per
+`render()` on Python 3.12.15, PyChrono 10.0.0, macOS arm64.
+
+| Seed | Rays | Median before | Median after | Change | p95 before | p95 after |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 1,175 | 1.105 ms | 0.970 ms | -12.2% | 1.268 ms | 1.022 ms |
+| 1 | 1,220 | 1.240 ms | 1.118 ms | -9.8% | 1.425 ms | 1.190 ms |
+| 2 | 1,219 | 1.141 ms | 1.045 ms | -8.4% | 1.224 ms | 1.107 ms |
+
+The after measurements split the median render time as follows:
+
+| Seed | Total | Primary rays | Shadow rays | Lamp glow |
+|---:|---:|---:|---:|---:|
+| 0 | 0.985 ms | 0.627 ms | 0.266 ms | 0.021 ms |
+| 1 | 1.119 ms | 0.609 ms | 0.416 ms | 0.021 ms |
+| 2 | 1.036 ms | 0.584 ms | 0.359 ms | 0.020 ms |
+
+Reproduce the after measurements with:
+
+```
+python -m scripts.benchmark_eyes
+```
+
 ## Running your tests
 
 ```
