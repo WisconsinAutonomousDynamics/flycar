@@ -15,12 +15,32 @@ You can run it by hand to see the real error message:
     python flycar/env/sensing/sensor_probe.py
 """
 
+import os
 import sys
+from pathlib import Path
+
+
+def use_installed_shaders(sens):
+    """Point the sensor module at its shader files if it looks in the wrong place.
+
+    The PyChrono 10 conda package for Windows installs the compiled shaders in
+    ``<env>/Library/sensor_shaders/`` but looks for them in
+    ``<env>/Library/lib/sensor_ptx/``, so every camera fails with "PTX file not
+    found". Only redirect when the default folder lacks the shaders and the
+    installed folder has them; everywhere else nothing changes.
+    """
+    if (Path(sens.GetSensorShaderDir()) / "box.ptx").is_file():
+        return
+    installed = Path(sys.prefix) / "Library" / "sensor_shaders"
+    if (installed / "box.ptx").is_file():
+        sens.SetSensorShaderDir(str(installed) + os.sep)
 
 
 def main():
     import pychrono as chrono
     import pychrono.sensor as sens
+
+    use_installed_shaders(sens)
 
     # The smallest possible scene: one fixed box and one light.
     system = chrono.ChSystemNSC()
