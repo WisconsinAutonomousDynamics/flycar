@@ -34,7 +34,6 @@
 /flycar/config/vision.py            @WisconsinAutonomousDynamics/flycar-vision
 /tests/test_vision.py               @WisconsinAutonomousDynamics/flycar-vision
 /docs/teams/vision.md               @WisconsinAutonomousDynamics/flycar-vision
-/docs/light_seek.yaml               @WisconsinAutonomousDynamics/flycar-vision
 /teams/team-vision.md               @WisconsinAutonomousDynamics/flycar-vision
 
 # ---- Core & body sensing -----------------------------------------------------
