@@ -4,6 +4,7 @@ import ast
 import math
 import subprocess
 import sys
+from pathlib import Path
 
 from flycar.tools.batch import comparison_table, parse_seeds, run_batch, run_batch, wilson_interval, summarize
 import numpy as np
@@ -15,6 +16,7 @@ from flycar.drivers import BUILTIN_DRIVERS, make_driver
 from flycar.drivers.base import Driver
 from flycar.env import spaces
 from flycar.tools.logger import EpisodeLogger, load_log
+from flycar.tools import batch, leaderboard
 
 
 def _run_and_log(make_env, path, steps=60):
@@ -404,3 +406,258 @@ def test_determinism():
 
   pd.testing.assert_frame_equal(table1, table2)
 
+
+
+# ----------------------------------------------------------------------------
+# Leaderboard (flycar/tools/leaderboard.py and the leaderboard options of batch.py)
+# ----------------------------------------------------------------------------
+
+
+_GOOD_DRIVER = """
+class GoodDriver:
+    def reset(self):
+        pass
+
+    def act(self, observation):
+        return [0.0, 0.0, 0.0]
+"""
+
+_TWO_DRIVERS = _GOOD_DRIVER + """
+
+class AnotherDriver(GoodDriver):
+    pass
+"""
+
+_HUMAN_DRIVER = _GOOD_DRIVER.replace("class GoodDriver:", "class HumanDriver:\n    needs_key_events = True\n")
+
+
+def _make_fake_contrib(root, name):
+    """A contrib-like package with one good driver and several things the leaderboard must cope with."""
+    package = root / name
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "good_driver.py").write_text(_GOOD_DRIVER, encoding="utf-8")
+    (package / "broken_driver.py").write_text("raise RuntimeError('boom')\n", encoding="utf-8")
+    (package / "two_driver.py").write_text(_TWO_DRIVERS, encoding="utf-8")
+    (package / "human_driver.py").write_text(_HUMAN_DRIVER, encoding="utf-8")
+    # Not named *_driver.py, so it is not a driver module and must never be imported.
+    (package / "helpers.py").write_text("raise RuntimeError('must not be imported')\n", encoding="utf-8")
+
+
+def test_discover_drivers_lists_the_builtins_but_not_the_keyboard_driver():
+    names, warnings = leaderboard.discover_drivers(contrib_package="no_such_package_for_the_tests")
+    assert "braitenberg" in names and "random" in names
+    assert "keyboard" not in names           # it needs a person at the keyboard
+    assert warnings == []                    # a missing contrib folder is fine
+
+
+def test_discover_drivers_finds_contrib_drivers_and_reports_the_bad_ones(tmp_path, monkeypatch):
+    _make_fake_contrib(tmp_path, "fake_contrib_for_the_tests")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    names, warnings = leaderboard.discover_drivers(contrib_package="fake_contrib_for_the_tests", include_builtin=False)
+
+    assert names == ["fake_contrib_for_the_tests.good_driver:GoodDriver"]
+    assert any("broken_driver" in warning and "boom" in warning for warning in warnings)
+    assert any("two_driver" in warning and "exactly one" in warning for warning in warnings)
+    assert any("human_driver" in warning and "keyboard" in warning for warning in warnings)
+    assert not any("helpers" in warning for warning in warnings)
+    assert len(warnings) == 3
+
+
+def test_every_discovered_driver_can_be_created_by_make_driver():
+    names, _ = leaderboard.discover_drivers()
+    assert names                              # at least the built-ins
+    for name in names:
+        assert isinstance(make_driver(name), Driver), name
+
+
+def test_discover_scenarios(tmp_path):
+    for name in ("b.yaml", "a.yaml", "team_x.yaml", "notes.txt"):
+        (tmp_path / name).write_text("", encoding="utf-8")
+    assert [Path(path).name for path in leaderboard.discover_scenarios(tmp_path)] == ["a.yaml", "b.yaml", "team_x.yaml"]
+    assert [Path(path).name for path in leaderboard.discover_scenarios(tmp_path, include_team=False)] == ["a.yaml", "b.yaml"]
+
+
+def test_discover_scenarios_default_folder_has_the_baseline_scenarios():
+    names = [Path(path).name for path in leaderboard.discover_scenarios()]
+    assert "light_seek.yaml" in names and "empty_arena.yaml" in names
+
+
+def test_expand_all_replaces_the_word_all_without_repeats():
+    assert leaderboard.expand_all(["x", "all", "y"], ["a", "x"]) == ["x", "a", "y"]
+    assert leaderboard.expand_all(["only"], ["a", "b"]) == ["only"]
+
+
+def test_one_job_turns_a_crash_into_an_error_row():
+    row = batch.one_job(("no_such_scenario_file.yaml", "braitenberg", 3))
+    assert row["scenario"] == "no_such_scenario_file"
+    assert row["driver"] == "braitenberg"
+    assert row["seed"] == 3
+    assert row["success"] is False
+    assert row["termination_reason"] == "error"
+    assert "ScenarioError" in row["error"]
+    assert math.isnan(row["duration_s"]) and math.isnan(row["target_distance"])
+
+
+def test_summarize_counts_crashes_as_failures_and_still_knows_the_target():
+    nan = float("nan")
+
+    def row(driver, seed, success, reason, distance, error=""):
+        crashed = reason == "error"
+        return {
+            "scenario": "light_seek", "driver": driver, "seed": seed, "success": success,
+            "time_to_target": 8.0 if success else nan, "target_distance": distance,
+            "contact_steps": nan if crashed else 0, "path_length": nan if crashed else 30.0,
+            "termination_reason": reason, "error": error,
+        }
+
+    table = pd.DataFrame([
+        row("good", 0, True, "success", 2.4),
+        row("good", 1, False, "timeout", 20.0),
+        row("crashy", 0, False, "error", nan, "RuntimeError: boom"),
+        row("crashy", 1, False, "error", nan, "RuntimeError: boom"),
+    ])
+    summary = summarize(table)
+
+    crashy = _group(summary, "light_seek", "crashy")
+    assert crashy["has_target"]                  # not mistaken for a scenario without a target
+    assert crashy["errors"] == 2
+    assert crashy["successes"] == 0
+    assert crashy["success_rate"] == pytest.approx(0.0)
+
+    good = _group(summary, "light_seek", "good")
+    assert good["errors"] == 0
+    assert good["success_rate"] == pytest.approx(0.5)
+
+
+def test_error_report_names_the_driver_and_the_error():
+    table = pd.DataFrame([
+        {"scenario": "light_seek", "driver": "bad", "seed": 4, "termination_reason": "error", "error": "ValueError: boom"},
+        {"scenario": "light_seek", "driver": "bad", "seed": 7, "termination_reason": "error", "error": "ValueError: boom"},
+        {"scenario": "light_seek", "driver": "bad", "seed": 9, "termination_reason": "timeout", "error": ""},
+        {"scenario": "light_seek", "driver": "fine", "seed": 0, "termination_reason": "success", "error": ""},
+    ])
+    lines = leaderboard.error_report(table)
+    assert len(lines) == 1
+    assert "light_seek / bad" in lines[0]
+    assert "2 of 3" in lines[0]
+    assert "seed 4" in lines[0]
+    assert "ValueError: boom" in lines[0]
+    assert leaderboard.error_report(table[table["termination_reason"] != "error"]) == []
+    assert leaderboard.error_report(pd.DataFrame({"scenario": []})) == []     # no crash information at all
+
+
+def _leaderboard_summary():
+    nan = float("nan")
+
+    def row(scenario, driver, episodes, successes, errors=0, has_target=True):
+        return {
+            "scenario": scenario, "driver": driver, "episodes": episodes, "has_target": has_target,
+            "successes": successes if has_target else nan,
+            "success_rate": successes / episodes if has_target else nan,
+            "errors": errors,
+        }
+
+    return pd.DataFrame([
+        row("light_seek", "random", 10, 0, errors=3),
+        row("light_seek", "braitenberg", 10, 9),
+        row("light_seek", "pkg.mod_driver:MyDriver", 10, 10),
+        row("empty_arena", "random", 10, 0, has_target=False),
+        row("empty_arena", "braitenberg", 10, 0, has_target=False),
+        row("empty_arena", "pkg.mod_driver:MyDriver", 10, 0, has_target=False),
+    ])
+
+
+def test_leaderboard_table_puts_the_best_driver_first():
+    grid = leaderboard.leaderboard_table(_leaderboard_summary())
+    assert list(grid.index) == ["pkg.mod_driver:MyDriver", "braitenberg", "random"]
+    assert list(grid.columns) == ["empty_arena", "light_seek"]
+    assert grid["empty_arena"].isna().all()                 # no target, no success rate
+    assert grid.loc["braitenberg", "light_seek"] == pytest.approx(0.9)
+
+
+def test_leaderboard_figure_shows_every_cell(tmp_path):
+    figure = leaderboard.make_figure(_leaderboard_summary())
+    ax = figure.axes[0]
+    assert [label.get_text() for label in ax.get_yticklabels()] == ["MyDriver", "braitenberg", "random"]
+    assert [label.get_text() for label in ax.get_xticklabels()] == ["empty_arena", "light_seek"]
+
+    cells = [text.get_text() for text in ax.texts]
+    assert cells.count("n/a") == 3
+    assert "90%\n9/10" in cells
+    assert "100%\n10/10" in cells
+    assert "0%\n0/10\n3 err" in cells                       # crashed episodes are mentioned
+
+    output = tmp_path / "leaderboard.png"
+    figure.savefig(output)
+    assert output.stat().st_size > 5_000
+
+
+def test_leaderboard_figure_marks_a_pair_that_was_not_run():
+    summary = _leaderboard_summary()
+    summary = summary[~((summary["driver"] == "random") & (summary["scenario"] == "light_seek"))]
+    cells = [text.get_text() for text in leaderboard.make_figure(summary).axes[0].texts]
+    assert "not run" in cells
+
+
+def test_leaderboard_figure_needs_something_to_draw():
+    with pytest.raises(ValueError):
+        leaderboard.make_figure(_leaderboard_summary().iloc[0:0])
+
+
+def test_write_summary_files_and_figure(tmp_path):
+    summary = _leaderboard_summary()
+    summary_path, leaderboard_path = leaderboard.write_summary_files(summary, tmp_path / "out")
+    assert len(pd.read_csv(summary_path)) == 6
+    board = pd.read_csv(leaderboard_path, index_col="driver")
+    assert list(board.index) == ["pkg.mod_driver:MyDriver", "braitenberg", "random"]
+
+    figure_path = leaderboard.write_figure(summary, tmp_path / "figures" / "board.png")
+    assert figure_path.stat().st_size > 5_000
+
+
+def test_main_runs_the_leaderboard_and_writes_its_files(tmp_path, monkeypatch, capsys):
+    """The command-line wiring, with the simulation replaced by a stand-in."""
+    scenarios = [str(tmp_path / "light_seek.yaml"), str(tmp_path / "empty_arena.yaml")]
+    monkeypatch.setattr(leaderboard, "discover_scenarios", lambda include_team=True: scenarios)
+    monkeypatch.setattr(leaderboard, "discover_drivers", lambda: (["alpha", "beta"], ["could not load gamma"]))
+
+    def fake_run_batch(scenario_list, driver_list, seeds, workers=1, progress=None):
+        rows = []
+        for scenario in scenario_list:
+            for driver in driver_list:
+                for seed in seeds:
+                    has_target = Path(scenario).stem != "empty_arena"
+                    success = has_target and (driver == "alpha" or seed % 2 == 0)
+                    rows.append({
+                        "scenario": Path(scenario).stem, "driver": driver, "seed": seed, "success": success,
+                        "time_to_target": 8.0 if success else float("nan"),
+                        "target_distance": (2.4 if success else 20.0) if has_target else float("nan"),
+                        "contact_steps": 0, "path_length": 30.0, "duration_s": 8.0,
+                        "termination_reason": "success" if success else "timeout", "error": "",
+                    })
+        return pd.DataFrame(rows)
+
+    monkeypatch.setattr(batch, "run_batch", fake_run_batch)
+    out = tmp_path / "out"
+    monkeypatch.setattr(sys, "argv", [
+        "batch", "--scenario", "all", "--driver", "all", "--seeds", "0-3",
+        "--out", str(out), "--figure", str(tmp_path / "board.png"),
+    ])
+
+    batch.main()
+
+    printed = capsys.readouterr()
+    assert "could not load gamma" in printed.err                 # a driver that could not load is reported
+    assert "light_seek / alpha: 4/4 reached the target" in printed.out
+    assert "empty_arena / alpha: no target" in printed.out
+    for name in ("results.csv", "summary.csv", "leaderboard.csv"):
+        assert (out / name).exists(), name
+    assert (tmp_path / "board.png").stat().st_size > 5_000
+
+    board = pd.read_csv(out / "leaderboard.csv", index_col="driver")
+    assert list(board.index) == ["alpha", "beta"]                # best first
+    assert board.loc["alpha", "light_seek"] == pytest.approx(1.0)
+    assert board.loc["beta", "light_seek"] == pytest.approx(0.5)
+    assert board["empty_arena"].isna().all()
