@@ -11,6 +11,8 @@
 #   one_job()    runs inside a worker: builds its own env + driver for ONE episode
 #   run_one()    the episode itself: the reset / act / step loop, plus measurements
 #   summarize(), print_summary(), comparison_table()  turn the table into results
+#   leaderboard.py  finds every driver and scenario (--driver all, --scenario all)
+#                   and draws the drivers x scenarios figure (--figure)
 #
 # Because every job builds its own environment, an episode depends only on
 # (scenario, driver, seed), so results do not depend on the number of workers.
@@ -24,6 +26,8 @@ import sys
 # FlyCar imports: the environment class and the driver factory.
 from flycar.env.core import FlyCarEnv
 from flycar.drivers import make_driver
+# Leaderboard helpers: finding drivers and scenarios, the figure, the extra output files.
+from flycar.tools import leaderboard
 # pandas holds the results table; get_context picks how worker processes start.
 import pandas as pd
 from multiprocessing import get_context
@@ -88,7 +92,8 @@ def run_one(env, driver, seed):
 
 # Run every combination of scenario, driver and seed and return one table.
 # workers=1 runs in this process; more than 1 uses a pool of worker processes.
-def run_batch(scenarios, drivers, seeds, workers=1) -> pd.DataFrame:
+# progress, if given, is called as progress(done, total) after every episode.
+def run_batch(scenarios, drivers, seeds, workers=1, progress=None) -> pd.DataFrame:
     # One job per (scenario, driver, seed). The last loop varies fastest, so rows
     # come out grouped by scenario, then driver, then seed.
     jobs = [
@@ -97,17 +102,26 @@ def run_batch(scenarios, drivers, seeds, workers=1) -> pd.DataFrame:
         for driver in drivers
         for seed in seeds
     ]
-    # Serial path: a plain loop, so errors show ordinary tracebacks.
+    # Serial path: a plain loop.
     if workers == 1:
-        results = [one_job(job) for job in jobs]
+        results = []
+        for done, job in enumerate(jobs, start=1):
+            results.append(one_job(job))
+            if progress:
+                progress(done, len(jobs))
     # Parallel path.
     else:
         # 'spawn' starts clean processes. Chrono objects cannot be shared between
         # processes, so each worker builds its own environment in one_job().
         with get_context("spawn").Pool(processes=workers) as pool:
-        # map keeps results in job order. chunksize=1 hands out one job at a time,
-        # which balances the load when some episodes (timeouts) are much slower.
-            results = pool.map(one_job, jobs, chunksize=1)
+            # imap keeps results in job order, like map, but hands them back one at a
+            # time so progress can be reported. chunksize=1 hands out one job at a time,
+            # which balances the load when some episodes (timeouts) are much slower.
+            results = []
+            for done, row in enumerate(pool.imap(one_job, jobs, chunksize=1), start=1):
+                results.append(row)
+                if progress:
+                    progress(done, len(jobs))
     # A list of row dicts becomes a table: one row per episode.
     return pd.DataFrame(results)
   
@@ -130,13 +144,24 @@ def write_table(table, out_dir):
 def summarize(table):
     # One summary row is collected per group.
     rows = []
+    # Does each scenario have a target lamp? Judged per scenario, from the episodes that
+    # did not crash, so a driver whose episodes all crashed is not mistaken for 'no target'.
+    healthy = table
+    if "termination_reason" in table.columns:
+        healthy = table[table["termination_reason"] != "error"]
+    scenario_has_target = healthy.groupby("scenario")["target_distance"].apply(
+        lambda values: bool(values.notna().any()))
     # Split the table into one sub-table per (scenario, driver) pair.
     for (scenario, driver), group in table.groupby(["scenario", "driver"], sort=True):
         # Number of episodes in this group.
         n = len(group)
         # A scenario with no target lamp has NaN target_distance in every episode;
         # 'success' means nothing there, so such groups get no success rate.
-        has_target = group["target_distance"].notna().any()
+        has_target = bool(scenario_has_target.get(scenario, True))
+        # Episodes that crashed; they count as failures in the success rate.
+        errors = 0
+        if "termination_reason" in group.columns:
+            errors = int((group["termination_reason"] == "error").sum())
 
         # Numbers that make sense for every group, with or without a target.
         row = {
@@ -144,6 +169,7 @@ def summarize(table):
             "driver": driver,
             "episodes": n,
             "has_target": has_target,
+            "errors": errors,
             "mean_contact_steps": group["contact_steps"].mean(),
             "mean_path_length": group["path_length"].mean(),
         }
@@ -179,10 +205,13 @@ def print_summary(summary):
     for _, r in summary.iterrows():
     # Prefix for the line, e.g. 'light_seek / braitenberg'.
         label = f"{r['scenario']} / {r['driver']}"
+        # Say how many episodes crashed, if any.
+        errors = int(r.get("errors", 0))
+        suffix = f", {errors} crashed" if errors else ""
         # No target: say so, instead of printing a misleading 0 %.
         if not r["has_target"]:
             print(f"{label}: no target in this scenario, success rate not applicable "
-                  f"({int(r['episodes'])} episodes)")
+                  f"({int(r['episodes'])} episodes){suffix}")
             continue
         # The median is NaN when nobody reached the target.
         median = r["median_time_to_target"]
@@ -190,7 +219,7 @@ def print_summary(summary):
         # e.g. '45/50 reached the target (90.00%, 95% CI: [78.64%, 95.65%]), ...'
         print(f"{label}: {int(r['successes'])}/{int(r['episodes'])} reached the target "
               f"({r['success_rate']:.2%}, 95% CI: [{r['ci_low']:.2%}, {r['ci_high']:.2%}]), "
-              f"median time to target: {median_text}")
+              f"median time to target: {median_text}{suffix}")
 
 
 # Success rates as a grid: one row per driver, one column per scenario.
@@ -220,23 +249,45 @@ def wilson_interval(succeses, total):
   upper_bound = (centre_adjusted_probability + z * adjusted_standard_deviation) / denominator
   return lower_bound, upper_bound
 
+# The table row for an episode that crashed. The measurements are NaN (unknown) and
+# the reason is 'error'; success is False, so a crash counts as a failure.
+def error_row(seed, error):
+  nan = float("nan")
+  # One short line, so that it fits in a CSV cell and in the terminal.
+  message = " ".join(f"{type(error).__name__}: {error}".split())[:300]
+  return {
+    "seed": seed,
+    "success": False,
+    "time_to_target": nan,
+    "target_distance": nan,
+    "contact_steps": nan,
+    "path_length": nan,
+    "duration_s": nan,
+    "termination_reason": "error",
+    "error": message,
+  }
+
 # What one worker runs: ONE episode, described by plain data so that it can be
 # sent to another process. Builds its own env and driver (Chrono objects cannot
 # be shared between processes), runs run_one, and adds scenario and driver labels.
 def one_job(job_specs):
   # Defined up front so the finally block can tell whether the env was created.
   env = None
-  # try/finally guarantees the env is closed even if the episode crashes.
+  # A job is a (scenario file path, driver name, seed) tuple.
+  scenario_path, driver_name, seed = job_specs
+  # try/except/finally: a crash becomes an 'error' row instead of stopping the whole
+  # batch, and the env is closed either way.
   try:
-    # A job is a (scenario file path, driver name, seed) tuple.
-    scenario_path, driver_name, seed = job_specs
     # Build a fresh environment for this episode (CPU 'raycast' eyes).
     env = FlyCarEnv(scenario_path, eye_backend="raycast")
     # Build the driver from its name (e.g. 'braitenberg').
     driver = make_driver(driver_name)
 
-    # The episode itself.
-    res = run_one(env, driver, seed)
+    # The episode itself. 'error' stays empty for episodes that ran normally.
+    res = {**run_one(env, driver, seed), "error": ""}
+  # Anything that goes wrong (a bad scenario file, a driver that raises) is recorded.
+  except Exception as error:
+    res = error_row(seed, error)
   # Runs whether or not the episode succeeded.
   finally:
     # Only close the env if it was actually created.
@@ -273,10 +324,14 @@ def main():
   # Describe the options for --help.
   parser = argparse.ArgumentParser(description="Run a batch of FlyCar episodes.")
   # --scenario may name several files, separated by commas.
-  parser.add_argument("--scenario", required=True, help="Scenario YAML file, e.g. scenarios/light_seek.yaml")
+  parser.add_argument("--scenario", required=True,
+                          help="Scenario YAML file, e.g. scenarios/light_seek.yaml; several separated by "
+                               "commas, or 'all' for every file in scenarios/")
   # --driver may name several drivers, separated by commas.
   parser.add_argument("--driver", default="braitenberg",
-                          help="random, braitenberg, keyboard, or package.module:ClassName (default: braitenberg)")
+                          help="random, braitenberg, keyboard, or package.module:ClassName (default: braitenberg); "
+                               "several separated by commas, or 'all' for every built-in driver that needs "
+                               "no person plus the drivers in flycar/drivers/contrib/")
   # Seeds as text, parsed by parse_seeds(), e.g. 0-49.
   parser.add_argument("--seeds", default="0-9", help="Seeds to run")
   # How many processes to use; 1 runs everything in this process.
@@ -284,6 +339,12 @@ def main():
   # Optional folder for results.csv. Nothing is written without it.
   parser.add_argument("--out", help="Directory to write results")
   parser.add_argument("--print", help="Print the results table to stdout", action="store_true")
+  # Where to write the drivers x scenarios figure, if wanted.
+  parser.add_argument("--figure", help="Write the leaderboard figure (success rate, drivers x scenarios) "
+                                      "to this image file, e.g. outputs/leaderboard.png")
+  # With --scenario all, leave out the teams' scratch scenarios (team_*.yaml).
+  parser.add_argument("--no-team-scenarios", action="store_true",
+                      help="With --scenario all: skip the team_*.yaml scratch scenarios")
 
   # Read the command line.
   args = parser.parse_args()
@@ -293,8 +354,36 @@ def main():
   scenarios = [s.strip() for s in args.scenario.split(",") if s.strip()]
   drivers = [d.strip() for d in args.driver.split(",") if d.strip()]
 
+  # 'all' means every scenario file in scenarios/ and every driver the leaderboard finds:
+  # the built-ins that need no person, plus the teams' drivers in flycar/drivers/contrib/.
+  if "all" in scenarios:
+    found_scenarios = leaderboard.discover_scenarios(include_team=not args.no_team_scenarios)
+    scenarios = leaderboard.expand_all(scenarios, found_scenarios)
+  if "all" in drivers:
+    found_drivers, warnings = leaderboard.discover_drivers()
+    # A team's driver that cannot be loaded is reported, and the others still run.
+    for warning in warnings:
+      print(f"warning: {warning}", file=sys.stderr)
+    drivers = leaderboard.expand_all(drivers, found_drivers)
+  if not scenarios or not drivers:
+    parser.error("Nothing to run: no scenarios or no drivers were found.")
+
+  # Say what is about to run: a leaderboard can take a while.
+  print(f"Running {len(scenarios) * len(drivers) * len(seeds)} episodes: "
+        f"{len(scenarios)} scenario(s) x {len(drivers)} driver(s) x {len(seeds)} seed(s), "
+        f"{args.workers} worker(s).")
+  print(f"  scenarios: {', '.join(Path(s).stem for s in scenarios)}")
+  print(f"  drivers:   {', '.join(drivers)}")
+
+  # A progress line, only when a person is watching the terminal.
+  progress = None
+  if sys.stderr.isatty():
+    progress = lambda done, total: print(f"\r  {done}/{total} episodes done", end="", file=sys.stderr, flush=True)
+
   # Run all (scenario, driver, seed) combinations and collect the table.
-  table = run_batch(scenarios, drivers, seeds, workers=args.workers)
+  table = run_batch(scenarios, drivers, seeds, workers=args.workers, progress=progress)
+  if progress:
+    print(file=sys.stderr)
 
   # Only write the CSV if --out was given.
   if args.out:
@@ -308,6 +397,23 @@ def main():
   summary = summarize(table)
   # One printed line per row.
   print_summary(summary)
+
+  # Which drivers crashed and how, so that the owning team can be told.
+  crashes = leaderboard.error_report(table)
+  if crashes:
+    print("\nSome episodes crashed (they count as failures):")
+    for line in crashes:
+      print(f"  {line}")
+
+  # With --out, also keep the summary and the drivers x scenarios grid as CSV files.
+  if args.out:
+    for summary_path in leaderboard.write_summary_files(summary, args.out):
+      print(f"Summary written to {summary_path}")
+
+  # With --figure, draw the grid as an image.
+  if args.figure:
+    figure_path = leaderboard.write_figure(summary, args.figure)
+    print(f"Figure written to {figure_path}")
 
   # Print the results table to stdout if --print is specified.
   if args.print:
