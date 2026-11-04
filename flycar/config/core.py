@@ -6,7 +6,7 @@ Add a setting by adding a key (with a comment saying what it does and its
 units) to a section below, and a check for it in ``validate``. Defaults must
 reproduce the current behaviour exactly.
 """
-
+import time, math
 from flycar.config import ScenarioError, require_defaults
 
 SECTIONS = {
@@ -16,7 +16,8 @@ SECTIONS = {
     },
     "timing": {
         "control_period_s": 0.01,  # one env.step() = this much simulated time
-        "physics_step_s": 0.001,   # Chrono integration step (must divide the control period)
+        "physics_step_s": 0.001,
+        "profile": False,  # enable per-phase wall-clock profiling   # Chrono integration step (must divide the control period)
     },
     "contact": {
         "mode": "flag",          # flag: 0/1 touch flags. (Planned: force, in newtons.)
@@ -39,6 +40,8 @@ NOT_YET_IMPLEMENTED = {
 
 def validate(scenario, where):
     """Catch the mistakes that would otherwise fail deep inside Chrono."""
+    if type(scenario["timing"]["profile"]) is not bool:
+        raise ScenarioError(f"{where}: timing.profile must be a boolean.")
     control = scenario["timing"]["control_period_s"]
     physics = scenario["timing"]["physics_step_s"]
     substeps = control / physics
