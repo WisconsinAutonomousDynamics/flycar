@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from flycar.env.scenario import load_scenario
-from flycar.env.core import FlyCarEnv
+from flycar.env.core import FlyCarEnv, measure_timer_overhead
 
 EPISODES = 10
 SCENARIO = "scenarios/light_seek.yaml"
@@ -22,6 +22,11 @@ env = FlyCarEnv(scenario, eye_backend="raycast")
 totals = defaultdict(float)
 total_wall = 0.0
 total_simulated = 0.0
+total_bookkeeping_overhead = 0.0
+
+timer_overhead_per_call = measure_timer_overhead()
+total_timer_calls = 0
+
 episode_results = []
 
 max_steps = round(
@@ -53,6 +58,9 @@ try:
         simulated = float(info["time"])
         profile = info["extras"]["core"]["env"]
 
+        total_timer_calls += sum(profile["calls"].values())
+        total_bookkeeping_overhead += profile["bookkeeping_overhead_s"]
+
         for phase, seconds in profile["timings_s"].items():
             totals[phase] += seconds
 
@@ -70,7 +78,9 @@ try:
             "truncated": bool(truncated),
             "timings_s": dict(profile["timings_s"]),
             "calls": dict(profile["calls"]),
+            "bookkeeping_overhead_s": profile["bookkeeping_overhead_s"],
         }
+
         episode_results.append(result)
 
         print(
@@ -84,6 +94,20 @@ try:
 finally:
     env.close()
 
+estimated_timer_overhead = (
+    timer_overhead_per_call * total_timer_calls
+)
+
+bookkeeping_overhead_pct = (
+    100 * total_bookkeeping_overhead / total_wall
+    if total_wall > 0 else 0.0
+)
+
+timer_overhead_pct = (
+    100 * estimated_timer_overhead / total_wall
+    if total_wall > 0 else 0.0
+)
+
 summary = {
     "scenario": SCENARIO,
     "eye_backend": "raycast",
@@ -94,6 +118,12 @@ summary = {
     "wall_s": total_wall,
     "rtf": total_simulated / total_wall,
     "timings_s": dict(totals),
+    "timer_overhead_per_call_s": timer_overhead_per_call,
+    "timer_overhead_s": estimated_timer_overhead,
+    "timer_overhead_pct": timer_overhead_pct,
+    "total_instrumented_calls": total_timer_calls,
+    "bookkeeping_overhead_s": total_bookkeeping_overhead,
+    "bookkeeping_overhead_pct": bookkeeping_overhead_pct,
     "episode_results": episode_results,
 }
 
@@ -109,6 +139,7 @@ print(f"Wall time: {total_wall:.3f}s")
 print(f"Real-time factor: {total_simulated / total_wall:.3f}x")
 
 print("\nPhase breakdown:")
+
 for phase, seconds in sorted(
     totals.items(), key=lambda item: item[1], reverse=True
 ):
@@ -118,5 +149,18 @@ for phase, seconds in sorted(
         f"{100 * seconds / total_wall:6.2f}%"
     )
 
+print(
+    f"\nEstimated timer overhead: "
+    f"{estimated_timer_overhead:.4f}s "
+    f"({timer_overhead_pct:.2f}% of wall time)"
+)
+
+print(
+    f"Measured bookkeeping overhead: "
+    f"{total_bookkeeping_overhead:.4f}s "
+    f"({bookkeeping_overhead_pct:.2f}% of wall time)"
+)
+
 print("\nNote: Nested timing categories may overlap.")
+print("Note: Timer overhead is an estimate, not a direct measurement.")
 print(f"Results saved to: {OUTPUT}")

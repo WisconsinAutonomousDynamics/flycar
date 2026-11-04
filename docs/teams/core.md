@@ -72,11 +72,14 @@ A1 implements optional wall-clock profiling of FlyCar's core environment.
 - Preserves the existing physics execution order and default behavior.
 - Resets profiling measurements between episodes.
 
-The 10-episode, 20×20 CPU raycast benchmark recorded an overall
-real-time factor of 0.689×.
 
-Full validation: 100 passed, 4 skipped.
-Baseline validation: 2 passed, 4 skipped.
+The updated 10-episode, 20×20 CPU raycast benchmark recorded an overall real-time factor of 1.452×, compared with 0.689× in the previous run.
+
+The new run completed 367.050 simulated seconds in 252.856 wall-clock seconds. Full-length episodes took approximately 25.81–30.53 seconds, showing substantially less variability than the earlier measurements.
+
+Latest core validation: 23 passed.
+Latest baseline validation: 2 passed, 4 skipped.
+Full-suite validation pending.
 
 The detailed methodology and results are included below.
 
@@ -144,6 +147,7 @@ The profiler returns a dictionary containing:
     "timings_s": {...},
     "calls": {...},
     "wall_s": ...,
+    "bookkeeping_overhead_s": ...,
     "control_steps": ...,
     "simulated_s": ...
 }
@@ -186,12 +190,14 @@ The following results were recorded from a completed 10-episode run using 20 × 
 
 #### Overall Performance
 
+
 | Metric | Result |
 |---|---:|
 | Episodes | 10 |
 | Total simulated time | 367.050 s |
-| Total wall-clock time | 533.006 s |
-| Overall real-time factor | 0.689× |
+| Total wall-clock time | 252.856 s |
+| Overall real-time factor | 1.452× |
+| Previous real-time factor | 0.689× |
 
 The real-time factor (RTF) is calculated as:
 
@@ -205,50 +211,77 @@ An RTF below 1.0× means the simulation takes longer than the simulated time it 
 
 #### Per-Episode Results
 
+
 | Episode | Simulated Time (s) | Wall Time (s) | RTF |
 |---|---:|---:|---:|
-| 1 | 40.00 | 82.25 | 0.49× |
-| 2 | 40.00 | 78.72 | 0.51× |
-| 3 | 7.05 | 5.43 | 1.30× |
-| 4 | 40.00 | 36.93 | 1.08× |
-| 5 | 40.00 | 36.65 | 1.09× |
-| 6 | 40.00 | 36.62 | 1.09× |
-| 7 | 40.00 | 38.16 | 1.05× |
-| 8 | 40.00 | 72.05 | 0.56× |
-| 9 | 40.00 | 76.59 | 0.52× |
-| 10 | 40.00 | 69.61 | 0.57× |
+| 1 | 40.00 | 26.63 | 1.50× |
+| 2 | 40.00 | 26.58 | 1.50× |
+| 3 | 7.05 | 3.95 | 1.78× |
+| 4 | 40.00 | 28.03 | 1.43× |
+| 5 | 40.00 | 28.34 | 1.41× |
+| 6 | 40.00 | 28.54 | 1.40× |
+| 7 | 40.00 | 30.53 | 1.31× |
+| 8 | 40.00 | 25.81 | 1.55× |
+| 9 | 40.00 | 27.91 | 1.43× |
+| 10 | 40.00 | 26.54 | 1.51× |
 
 Episode 3 ended after 7.05 simulated seconds. The remaining episodes reached 40 simulated seconds.
 
 #### Phase Timing Breakdown
 
+
 | Phase | Cumulative Time (s) | Percentage of Wall Time |
 |---|---:|---:|
-| Chrono physics | 304.1990 | 57.07% |
-| Eye rendering | 169.7745 | 31.85% |
-| Contact polling | 28.5343 | 5.35% |
-| Vehicle synchronization | 4.9052 | 0.92% |
-| Observation generation | 4.3954 | 0.82% |
-| IMU reading | 3.8543 | 0.72% |
-| Vehicle advancement | 3.7513 | 0.70% |
-| Info generation | 2.1589 | 0.41% |
-| Terrain synchronization | 1.2974 | 0.24% |
-| Terrain advancement | 0.6359 | 0.12% |
-| Eye updates | 0.2428 | 0.05% |
-| World synchronization | 0.1950 | 0.04% |
-| World advancement | 0.1701 | 0.03% |
-| Contact reading | 0.1275 | 0.02% |
+| Chrono physics | 146.4163 | 57.91% |
+| Eye rendering | 82.7995 | 32.75% |
+| Contact polling | 10.9027 | 4.31% |
+| Observation generation | 1.8663 | 0.74% |
+| Vehicle synchronization | 1.6755 | 0.66% |
+| IMU reading | 1.6158 | 0.64% |
+| Vehicle advancement | 1.3591 | 0.54% |
+| Info generation | 0.9454 | 0.37% |
+| Terrain synchronization | 0.4096 | 0.16% |
+| Terrain advancement | 0.2582 | 0.10% |
+| Eye updates | 0.0936 | 0.04% |
+| World synchronization | 0.0913 | 0.04% |
+| World advancement | 0.0778 | 0.03% |
+| Contact reading | 0.0504 | 0.02% |
+
+
+#### Profiling Instrumentation Overhead
+
+Profiling introduces additional work through high-resolution timer calls and the bookkeeping required to accumulate timing measurements.
+
+The updated benchmark separately reports:
+
+| Component | Time (s) | Percentage of Wall Time |
+|---|---:|---:|
+| Estimated timer-call overhead | 0.4839 | 0.19% |
+| Measured bookkeeping overhead | 1.2955 | 0.51% |
+
+Timer-call overhead is estimated using a repeated-call calibration of `time.perf_counter()`. This calibration also includes Python loop overhead and therefore does not isolate the timer cost perfectly.
+
+Bookkeeping overhead is measured around updates to the profiler's timing and call-count dictionaries.
+
+These measurements characterize individual instrumentation costs. They do not constitute a direct measurement of the complete performance difference between profiling-enabled and profiling-disabled execution.
+
+The benchmark's real-time factor includes profiling overhead.
+
+#### Main Findings
+
 
 #### Main Findings
 
 The two largest measured runtime costs are:
 
-1. **Chrono physics integration:** 57.07% of wall-clock time.
-2. **CPU raycast eye rendering:** 31.85% of wall-clock time.
+1. **Chrono physics integration:** 57.91% of wall-clock time.
+2. **CPU raycast eye rendering:** 32.75% of wall-clock time.
 
-Together, these operations account for approximately 88.9% of the measured wall-clock time.
+Together, these operations account for approximately 90.66% of the measured wall-clock time.
 
-Contact polling is the next-largest measured category, accounting for approximately 5.35%.
+Contact polling is the next-largest measured category, accounting for approximately 4.31%.
+
+The updated benchmark achieved an overall real-time factor of 1.452×, compared with 0.689× in the previous run.
 
 These results suggest that future optimization efforts should initially focus on physics integration and eye rendering.
 
@@ -266,11 +299,18 @@ Measurements also include effects from the operating system, Python runtime, and
 
 ### Performance Variability and Limitations
 
-Episode wall-clock times varied substantially.
 
-Some 40-second episodes completed in approximately 37–38 seconds, while others required approximately 70–82 seconds.
+### Performance Variability and Limitations
 
-This variability may be influenced by factors such as:
+The updated benchmark showed substantially less wall-clock variability than the previous run.
+
+For episodes reaching 40 simulated seconds, wall-clock times ranged from 25.81 to 30.53 seconds. The previous benchmark recorded times ranging from approximately 37 to 82 seconds for comparable full-length episodes.
+
+The updated run achieved an overall real-time factor of 1.452×, compared with 0.689× previously.
+
+The improved consistency suggests that the earlier measurements were affected by substantial performance variability. However, the exact cause of the difference between runs has not been established.
+
+Potential influences include:
 
 - CPU frequency and thermal conditions
 - Laptop power-management settings
@@ -278,28 +318,26 @@ This variability may be influenced by factors such as:
 - Operating-system scheduling
 - Differences in simulation workload
 
-The exact cause of the remaining variability has not been established.
+Episode 3 terminated after 7.05 simulated seconds and is therefore not directly comparable to the full-length episodes.
 
-An earlier benchmark run was interrupted when the laptop was closed. That run contained extremely large wall-clock measurements and is not used as the primary performance result.
-
-The results in this report come from the subsequent completed benchmark.
+An earlier benchmark run was interrupted when the laptop was closed. That run is excluded from the reported results.
 
 The benchmark measures performance on the machine used for testing and should not be interpreted as a universal FlyCar performance guarantee.
 
 ### Validation
 
-#### Full Test Suite
+#### Core Tests
 
 Command:
 
 ```powershell
-python -m pytest -q
+python -m pytest tests/test_core.py -q
 ```
 
 Result:
 
 ```text
-100 passed, 4 skipped in 117.76s
+23 passed in 84.66s
 ```
 
 #### Baseline Tests
@@ -313,10 +351,12 @@ python -m pytest tests/test_baseline.py -q
 Result:
 
 ```text
-2 passed, 4 skipped in 9.42s
+2 passed, 4 skipped in 5.85s
 ```
 
 The baseline tests passed without regenerating snapshots.
+
+The full test suite has not yet been rerun after the latest profiling changes.
 
 #### Profiling Tests
 
@@ -357,7 +397,10 @@ The benchmark script:
 7. Reports simulated time, wall time, and real-time factor.
 8. Writes results to `benchmark_core_results.json`.
 
-The JSON output is supported by the updated benchmark script; the numerical results documented above were collected before that script revision.
+
+The reported numerical results were generated using the updated benchmark script and saved to `benchmark_core_results.json`.
+
+The benchmark also reports an estimated timer-call overhead and a measured bookkeeping overhead. These measurements are reported separately and do not represent an exact measurement of total profiling overhead.
 
 For more reliable timing measurements:
 
@@ -376,12 +419,17 @@ For more reliable timing measurements:
 | `scripts/benchmark_core.py` | Provides a reproducible benchmark |
 | `docs/teams/core.md` | Documents implementation and results |
 
+
 ### Conclusions
 
-A1 establishes optional runtime profiling for FlyCar's core environment.
+A1 establishes optional runtime profiling for FlyCar's core environment while preserving the existing physics execution order and default behavior.
 
-The implementation records execution costs across physics, sensors, and environment operations while preserving the existing execution sequence and default behavior.
+The updated 10-episode benchmark completed 367.050 simulated seconds in 252.856 wall-clock seconds, achieving an overall real-time factor of 1.452×.
 
-The benchmark identifies Chrono physics integration and CPU raycast eye rendering as the primary performance costs.
+Chrono physics integration (57.91%) and CPU raycast eye rendering (32.75%) remain the primary performance bottlenecks, accounting for approximately 90.66% of measured wall-clock time.
 
-Future optimization work should investigate these components independently while maintaining simulation determinism and existing interface contracts.
+The profiler additionally reports estimated timer-call overhead of 0.19% and measured bookkeeping overhead of 0.51% of benchmark wall time. These are separate instrumentation measurements rather than an exact total profiling overhead.
+
+Compared with the previous benchmark's 0.689× real-time factor, the updated run demonstrates substantially improved performance and consistency under the measured conditions.
+
+Future optimization work should prioritize physics integration and eye rendering while maintaining simulation determinism and existing interface contracts.

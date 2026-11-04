@@ -55,6 +55,19 @@ SETTLE_TIME_S = 0.5
 # The 3D window is redrawn at most this often, in simulated time [s].
 RENDER_PERIOD_S = 0.02
 
+# This is an estimate, not a value measured by this benchmark run.
+PROFILE_OVERHEAD_ESTIMATE = 0.01
+def measure_timer_overhead(samples=100_000):
+    """Estimate the overhead of two perf_counter calls per measurement."""
+    start = time.perf_counter()
+
+    for _ in range(samples):
+        time.perf_counter()
+        time.perf_counter()
+
+    elapsed = time.perf_counter() - start
+    return elapsed / samples
+
 # Components that may offer debug data through an optional ``extra_info()``
 # method, and the team (slug) each belongs to. Their dicts end up in
 # info["extras"][slug][component]. See INFO_FIELDS in spaces.py.
@@ -102,8 +115,8 @@ class FlyCarEnv(gymnasium.Env):
         self._profile_enabled = timing.get("profile", False)
         self._profile_times = {}
         self._profile_calls = {}
-        self._profile_overhead_s = 0.0
         self._profile_wall_s = 0.0
+        self._profile_overhead_s = 0.0
         self._profile_steps = 0
         self.substeps = int(round(self.control_period / self.physics_step))
         self.eye_every = int(round(self.scenario["eyes"]["update_period_s"] / self.control_period))
@@ -277,9 +290,9 @@ class FlyCarEnv(gymnasium.Env):
         """Clear measurements at the beginning of an episode."""
         self._profile_times = {}
         self._profile_calls = {}
-        self._profile_overhead_s = 0.0
         self._profile_wall_s = 0.0
         self._profile_steps = 0
+        self._profile_overhead_s = 0.0
 
     def _measure(self, name, operation):
         """Measure one operation without changing its return value."""
@@ -290,12 +303,17 @@ class FlyCarEnv(gymnasium.Env):
         try:
             return operation()
         finally:
-            elapsed = time.perf_counter() - start
+            end = time.perf_counter()
+            elapsed = end - start
+            overhead_start = time.perf_counter()
             self._profile_times[name] = (
                 self._profile_times.get(name, 0.0) + elapsed
             )
             self._profile_calls[name] = (
                 self._profile_calls.get(name, 0) + 1
+            )
+            self._profile_overhead_s += (
+                time.perf_counter() - overhead_start
             )
 
     def extra_info(self):
@@ -307,6 +325,7 @@ class FlyCarEnv(gymnasium.Env):
             "timings_s": dict(self._profile_times),
             "calls": dict(self._profile_calls),
             "wall_s": self._profile_wall_s,
+            "bookkeeping_overhead_s": self._profile_overhead_s,
             "control_steps": self._profile_steps,
             "simulated_s": self._profile_steps * self.control_period,
         }
