@@ -1,9 +1,11 @@
 """Tools & drivers team: logger, replay, dashboard, run.py, and the drivers."""
 
 import ast
+import math
 import subprocess
 import sys
 
+from flycar.tools.batch import comparison_table, parse_seeds, run_batch, run_batch, wilson_interval, summarize
 import numpy as np
 import pandas as pd
 import pytest
@@ -296,3 +298,109 @@ def test_random_driver_is_reproducible():
     second = episode()
     np.testing.assert_array_equal(first, second)
     assert len(np.unique(first[:, spaces.STEERING])) > 1   # it does change its mind
+
+def test_parse_seeds_accepts_ranges_and_lists():
+    assert parse_seeds("0,2,4") == [0, 2, 4]
+    assert parse_seeds("1-3") == [1, 2, 3]
+    assert parse_seeds("0,2-4,6") == [0, 2, 3, 4, 6]
+    with pytest.raises(ValueError):
+        parse_seeds("5-3")
+
+def test_parse_seeds_accepts_single_values():
+    assert parse_seeds("7") == [7]
+    assert parse_seeds("0-0") == [0]
+
+def test_wilson_interval_returns_nan_for_zero_total():
+    lower, upper = wilson_interval(0, 0)
+    assert np.isnan(lower) and np.isnan(upper)
+
+def test_wilson_interval_returns_correct_bounds():
+    lower, upper = wilson_interval(40, 50)
+    assert lower == pytest.approx(0.670, abs=1e-3)
+    assert upper == pytest.approx(0.888, abs=1e-3)
+
+def _row(scenario, driver, seed, success, time_to_target, target_distance):
+    return {
+        "scenario": scenario,
+        "driver": driver,
+        "seed": seed,
+        "success": success,
+        "time_to_target": time_to_target,
+        "target_distance": target_distance,
+        "contact_steps": 10,
+        "path_length": 30.0,
+    }
+
+
+def _table():
+    nan = float("nan")
+    return pd.DataFrame([
+        # light_seek / good: 3 of 4 reach the target, in 8, 10 and 12 s.
+        _row("light_seek", "good", 0, True, 8.0, 2.4),
+        _row("light_seek", "good", 1, True, 10.0, 2.4),
+        _row("light_seek", "good", 2, True, 12.0, 2.4),
+        _row("light_seek", "good", 3, False, nan, 20.0),
+        # light_seek / bad: never reaches it.
+        _row("light_seek", "bad", 0, False, nan, 15.0),
+        _row("light_seek", "bad", 1, False, nan, 18.0),
+        # empty_arena has no lamp: target_distance is NaN for every episode.
+        _row("empty_arena", "good", 0, False, nan, nan),
+        _row("empty_arena", "good", 1, False, nan, nan),
+    ])
+
+
+def _group(summary, scenario, driver):
+    rows = summary[(summary["scenario"] == scenario) & (summary["driver"] == driver)]
+    assert len(rows) == 1
+    return rows.iloc[0]
+
+
+def test_summarize_has_one_row_per_scenario_and_driver():
+    summary = summarize(_table())
+    assert len(summary) == 3
+    assert set(zip(summary["scenario"], summary["driver"])) == {
+        ("light_seek", "good"), ("light_seek", "bad"), ("empty_arena", "good"),
+    }
+
+
+def test_summarize_counts_and_rate():
+    row = _group(summarize(_table()), "light_seek", "good")
+    assert row["episodes"] == 4
+    assert row["successes"] == 3
+    assert row["success_rate"] == pytest.approx(0.75)
+    assert row["ci_low"] < 0.75 < row["ci_high"]
+    assert 0.0 <= row["ci_low"] and row["ci_high"] <= 1.0
+
+
+def test_summarize_median_time_ignores_failures():
+    # Only the three successful episodes count: the median of 8, 10, 12 is 10.
+    # If failures leaked in as 40 s, the median would be higher.
+    row = _group(summarize(_table()), "light_seek", "good")
+    assert row["median_time_to_target"] == pytest.approx(10.0)
+
+
+def test_summarize_group_with_no_successes():
+    row = _group(summarize(_table()), "light_seek", "bad")
+    assert row["successes"] == 0
+    assert row["success_rate"] == pytest.approx(0.0)
+    assert row["ci_low"] == pytest.approx(0.0)
+    assert row["ci_high"] > 0.0
+    assert math.isnan(row["median_time_to_target"])
+
+
+def test_summarize_scenario_without_a_target_has_no_success_rate():
+    row = _group(summarize(_table()), "empty_arena", "good")
+    assert not row["has_target"]
+    assert math.isnan(row["success_rate"])
+    assert row["episodes"] == 2
+
+@pytest.mark.slow
+def test_determinism():
+  scenarios = ["scenarios/light_seek.yaml"]
+  drivers = ["braitenberg"]
+  seeds = range(0, 3)
+  table1 = run_batch(scenarios, drivers, seeds)
+  table2 = run_batch(scenarios, drivers, seeds, 2)
+
+  pd.testing.assert_frame_equal(table1, table2)
+
