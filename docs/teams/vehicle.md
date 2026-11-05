@@ -37,12 +37,55 @@ issue (see [`docs/CONTRACTS.md`](../CONTRACTS.md)):
 
 ```yaml
 terrain:
-  type: rigid_flat     # only value implemented; planned: patches, ramps, scm
+  type: rigid_flat     # rigid_flat or rigid_patches; planned: ramps, scm
   friction: 0.9
+  patches: []          # friction patches, only with type rigid_patches (see below)
 ```
 
 Any other `terrain.type` is rejected with "not implemented yet" until you
 implement it in `flycar/config/vehicle.py` and `flycar/env/terrain.py`.
+
+## Friction patches (B1)
+
+Areas of the arena where the car grips less ("ice") or differently ("mud"):
+
+```yaml
+terrain:
+  type: rigid_patches
+  friction: 0.9                 # the rest of the ground, as before
+  patches:
+    - x: 5.0                    # centre [m]
+      y: 0.0
+      size_m: [4.0, 4.0]        # size along x and y [m]
+      friction: 0.2             # ice
+    - x: -5.0
+      y: 0.0
+      size_m: [4.0, 4.0]
+      friction: 0.5             # mud
+```
+
+- Every patch needs `x`, `y`, `size_m` and `friction`. Positions are fixed
+  numbers (no `[min, max]` ranges: the terrain gets no random generator yet).
+  Patches must lie inside the arena and must not overlap each other
+  (touching is fine).
+- `type: rigid_flat` with no patches is exactly the old ground. Patches with
+  `rigid_flat` are rejected rather than silently ignored.
+- Each patch is a `RigidTerrain` box patch with its own `ChContactMaterialNSC`,
+  top surface at z = 0, level with the ground, so there is no step for the
+  tires to bump over. `RigidTerrain` gives a point the friction of the patch
+  added first among the highest ones, so the patches are added before the
+  ground. (Chrono 10.0, `RigidTerrain::FindPoint`.)
+- With TMeasy tires (default) the tires use the patch friction. With
+  `vehicle.tire_model: rigid` the tires collide with both the patch and the
+  ground box, so a patch only partly applies.
+- In the 3D window and to GPU cameras a patch is coloured from icy blue
+  (friction 0.1 or less) to dark brown (1.2 or more). The raycast eyes give
+  every surface the same albedo, so they do not see patches.
+- `tests/test_vehicle.py` checks the friction and height on and off the
+  patches, and that full throttle across a friction-0.1 strip gives more
+  wheel slip (A2's `info["extras"]`) than the same stretch of plain ground.
+- `scenarios/team_vehicle.yaml` has an ice strip between the spawn area and
+  the lamp to try it with the keyboard driver.
 
 ## Debug data from the car (A2)
 
@@ -112,3 +155,37 @@ Notes:
 pytest tests/test_vehicle.py
 python run.py --scenario scenarios/team_vehicle.yaml --driver braitenberg --dashboard
 ```
+
+## Fly-like vehicle settings
+
+```yaml
+vehicle:
+  max_speed_mps: 2.0             # top speed governor
+  steering_rate_per_s: 20.0      # how quickly the steering command can change
+  steering_gain: 2.0             # steering multiplier; scaled command is clamped to [-1, 1]
+  brake_rate_per_s: 20.0         # how quickly the brake command can increase
+  throttle_curve_exponent: 0.125 # stronger throttle response at partial input
+```
+
+### Measured handling
+
+Measured with these settings in a headless, seed-0 empty arena at a fixed spawn
+(0, 0, 0), with walls disabled and the `raycast` eye backend:
+
+| A1 measurement | Result |
+|---|---:|
+| Governed top speed | 1.985 m/s (mean over the final 2 s) |
+| 0–3 m/s time | Not reached with the 2.0 m/s governor; reaches 1.90 m/s in 0.27 s. |
+| Braking distance | 0.649 m, from 1.985 m/s to 0.040 m/s (0.52 s) |
+| Minimum turning radius | 2.750 m at a mean 0.938 m/s, full steering; circle-fit radial RMS error 0.00034 m. For this low-speed test only, the speed governor was set to 1.0 m/s. |
+| Steering step response | 0.14 s to the first sample at or above 90% of the final yaw-rate magnitude (0.725 rad/s). |
+
+Measurements used the settings above in a headless, seed-0 `empty_arena` at a
+fixed spawn `(0, 0, 0)`, with a `200 m x 200 m` arena, walls disabled, and the
+`raycast` eye backend. Top speed was averaged over the final 2 s of a 12 s
+full-throttle run. Braking began at the resulting top speed and ended when
+speed fell to 0.05 m/s or less. The turning-radius run used the same settings
+except for a 1.0 m/s speed governor; the circle was fit to the final 8 s of a
+12 s full-throttle, full-steering run. Steering step response began after a
+straight full-throttle approach to governed speed; the final yaw rate is the
+mean of the last 0.5 s of the response.

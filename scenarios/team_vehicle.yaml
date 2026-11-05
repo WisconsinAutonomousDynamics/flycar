@@ -24,6 +24,13 @@ episode:
   max_time_s: 40.0
   success_radius_m: 2.5
 
+vehicle:
+  max_speed_mps: 2.0           # top speed governor
+  steering_rate_per_s: 20.0    # how quickly the steering command can change
+  steering_gain: 2.0          # steering multiplier; scaled command is clamped to [-1, 1]
+  brake_rate_per_s: 20.0      # how quickly the brake command can increase
+  throttle_curve_exponent: 0.125 # stronger throttle response at partial input
+
 arena:
   size_m: [50.0, 40.0]
   walls: true
@@ -58,3 +65,12 @@ obstacles:
     x: [-8.0, 4.0]
     y: [-15.0, 15.0]
     count: 2
+
+# B1: an ice strip between the spawn area and the lamp (see docs/teams/vehicle.md).
+terrain:
+  type: rigid_patches
+  patches:
+    - x: -10.0
+      y: 0.0
+      size_m: [4.0, 36.0]
+      friction: 0.15            # ice
