@@ -37,12 +37,55 @@ issue (see [`docs/CONTRACTS.md`](../CONTRACTS.md)):
 
 ```yaml
 terrain:
-  type: rigid_flat     # only value implemented; planned: patches, ramps, scm
+  type: rigid_flat     # rigid_flat or rigid_patches; planned: ramps, scm
   friction: 0.9
+  patches: []          # friction patches, only with type rigid_patches (see below)
 ```
 
 Any other `terrain.type` is rejected with "not implemented yet" until you
 implement it in `flycar/config/vehicle.py` and `flycar/env/terrain.py`.
+
+## Friction patches (B1)
+
+Areas of the arena where the car grips less ("ice") or differently ("mud"):
+
+```yaml
+terrain:
+  type: rigid_patches
+  friction: 0.9                 # the rest of the ground, as before
+  patches:
+    - x: 5.0                    # centre [m]
+      y: 0.0
+      size_m: [4.0, 4.0]        # size along x and y [m]
+      friction: 0.2             # ice
+    - x: -5.0
+      y: 0.0
+      size_m: [4.0, 4.0]
+      friction: 0.5             # mud
+```
+
+- Every patch needs `x`, `y`, `size_m` and `friction`. Positions are fixed
+  numbers (no `[min, max]` ranges: the terrain gets no random generator yet).
+  Patches must lie inside the arena and must not overlap each other
+  (touching is fine).
+- `type: rigid_flat` with no patches is exactly the old ground. Patches with
+  `rigid_flat` are rejected rather than silently ignored.
+- Each patch is a `RigidTerrain` box patch with its own `ChContactMaterialNSC`,
+  top surface at z = 0, level with the ground, so there is no step for the
+  tires to bump over. `RigidTerrain` gives a point the friction of the patch
+  added first among the highest ones, so the patches are added before the
+  ground. (Chrono 10.0, `RigidTerrain::FindPoint`.)
+- With TMeasy tires (default) the tires use the patch friction. With
+  `vehicle.tire_model: rigid` the tires collide with both the patch and the
+  ground box, so a patch only partly applies.
+- In the 3D window and to GPU cameras a patch is coloured from icy blue
+  (friction 0.1 or less) to dark brown (1.2 or more). The raycast eyes give
+  every surface the same albedo, so they do not see patches.
+- `tests/test_vehicle.py` checks the friction and height on and off the
+  patches, and that full throttle across a friction-0.1 strip gives more
+  wheel slip (A2's `info["extras"]`) than the same stretch of plain ground.
+- `scenarios/team_vehicle.yaml` has an ice strip between the spawn area and
+  the lamp to try it with the keyboard driver.
 
 ## Debug data from the car (A2)
 

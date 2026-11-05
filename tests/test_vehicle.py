@@ -174,12 +174,122 @@ def test_scaled_steering_is_clamped_before_reaching_chrono(make_env):
 # ----------------------------------------------------------------------------
 
 def test_terrain_defaults_reproduce_the_flat_rigid_ground():
-    assert load_scenario({})["terrain"] == {"type": "rigid_flat", "friction": 0.9}
+    assert load_scenario({})["terrain"] == {"type": "rigid_flat", "friction": 0.9, "patches": []}
 
 
 def test_unimplemented_terrain_type_is_rejected():
     with pytest.raises(ScenarioError, match=r"terrain\.type: scm is not implemented yet"):
         load_scenario({"terrain": {"type": "scm"}})
+
+
+# ---- B1: friction patches -------------------------------------------------
+
+ICE = {"x": 5.0, "y": 0.0, "size_m": [4.0, 4.0], "friction": 0.2}
+MUD = {"x": -5.0, "y": 0.0, "size_m": [4.0, 4.0], "friction": 0.5}
+
+
+def _patches(*patches):
+    return {"type": "rigid_patches", "patches": [dict(p) for p in patches]}
+
+
+def test_valid_friction_patches_are_accepted():
+    touching = dict(ICE, x=9.0)                      # shares an edge with ICE: allowed
+    terrain = load_scenario({"terrain": _patches(ICE, MUD, touching)})["terrain"]
+    assert terrain["type"] == "rigid_patches"
+    assert len(terrain["patches"]) == 3
+
+
+@pytest.mark.parametrize(
+    "terrain, message",
+    [
+        ({"patches": [ICE]}, r"terrain\.patches needs terrain\.type: rigid_patches"),
+        (_patches(dict(ICE, z=1.0)), r"unknown setting 'z' in terrain\.patches\[0\]"),
+        (_patches({"x": 5.0, "y": 0.0, "size_m": [4.0, 4.0]}), r"missing 'friction'"),
+        (_patches(dict(ICE, x=[1.0, 2.0])), r"x must be a number"),
+        (_patches(dict(ICE, size_m=[4.0, -1.0])), r"size_m must be two positive numbers"),
+        (_patches(dict(ICE, size_m=[4.0])), r"size_m must be two positive numbers"),
+        (_patches(dict(ICE, friction=0.0)), r"friction must be positive"),
+        (_patches(dict(ICE, x=19.0)), r"reaches outside"),
+        (_patches(ICE, dict(MUD, x=7.0, y=1.0)), r"terrain\.patches\[1\] overlaps terrain\.patches\[0\]"),
+        ({"type": "rigid_patches", "patches": "ice"}, r"terrain\.patches must be a list"),
+    ],
+)
+def test_bad_friction_patches_are_rejected(terrain, message):
+    with pytest.raises(ScenarioError, match=message):
+        load_scenario({"terrain": terrain})
+
+
+def test_patch_colour_goes_from_icy_blue_to_dark_brown():
+    from flycar.env import terrain
+
+    assert terrain.patch_colour(0.05) == pytest.approx(terrain.ICE_COLOUR)
+    assert terrain.patch_colour(2.0) == pytest.approx(terrain.GRIP_COLOUR)
+    blues = [terrain.patch_colour(f)[2] for f in (0.1, 0.4, 0.8, 1.2)]
+    assert blues == sorted(blues, reverse=True)       # less blue as the grip goes up
+
+
+def test_rigid_flat_still_builds_one_ground_patch(make_env):
+    env = make_env(small_scenario())
+    env.reset(seed=0)
+    assert env.terrain.friction_patches == []
+    assert len(env.terrain.chrono_terrain.GetPatches()) == 1
+
+
+def test_friction_patches_set_the_friction_under_them_and_stay_level(make_env):
+    import pychrono as chrono
+
+    env = make_env(small_scenario(terrain=_patches(ICE, MUD)))
+    env.reset(seed=0)
+    ground = env.terrain.chrono_terrain
+    assert len(ground.GetPatches()) == 3              # two patches + the ground
+
+    def at(x, y):
+        return chrono.ChVector3d(x, y, 0.0)
+
+    for point, friction in [(at(5.0, 0.0), 0.2), (at(6.9, 1.9), 0.2),    # on the ice
+                            (at(-5.0, 0.0), 0.5),                         # on the mud
+                            (at(0.0, 0.0), 0.9), (at(7.5, 0.0), 0.9)]:    # plain ground
+        assert ground.GetCoefficientFriction(point) == pytest.approx(friction, abs=1e-6)
+        assert ground.GetHeight(point) == pytest.approx(0.0, abs=1e-9)    # no step at the patches
+
+
+# Driving across ice: a patch from x = 4 m to x = 24 m, right in the car's path.
+ICE_STRIP = {"x": 14.0, "y": 0.0, "size_m": [20.0, 10.0], "friction": 0.1}
+WHEEL_MARGIN_M = 1.5    # the axles are about 0.97 m in front of/behind the chassis origin
+
+
+def _mean_wheel_slip_over_strip(make_env, patches):
+    """Full throttle along +x; mean |slip| of the 4 wheels while all are over the strip's x range."""
+    env = make_env(small_scenario(
+        arena={"size_m": [60.0, 20.0], "walls": True},
+        episode={"max_time_s": 20.0},
+        vehicle={"max_speed_mps": 10.0},       # above the Gator's own top speed: the governor stays out
+        terrain={"type": "rigid_patches", "patches": patches},
+    ))
+    env.reset(seed=0)
+    start = ICE_STRIP["x"] - ICE_STRIP["size_m"][0] / 2.0 + WHEEL_MARGIN_M
+    end = ICE_STRIP["x"] + ICE_STRIP["size_m"][0] / 2.0 - WHEEL_MARGIN_M
+    slips = []
+    for _ in range(1500):
+        _, _, terminated, truncated, info = env.step([1.0, 0.0, 0.0])
+        x = float(info["pose"][0])
+        if x > end:
+            break
+        if x >= start:
+            wheels = info["extras"]["vehicle"]["vehicle"]["wheels"].values()
+            slips.append(sum(abs(wheel["slip"]) for wheel in wheels) / 4.0)
+        assert not (terminated or truncated), "the car did not get across the strip"
+    assert slips, "the car never reached the strip"
+    return sum(slips) / len(slips)
+
+
+@pytest.mark.slow
+def test_wheels_slip_more_on_a_low_friction_patch(make_env):
+    """B1 'done when': full throttle across ice gives more wheel slip than the plain ground."""
+    on_ground = _mean_wheel_slip_over_strip(make_env, [])
+    on_ice = _mean_wheel_slip_over_strip(make_env, [ICE_STRIP])
+    print(f"\n  mean |slip| over x = 5.5..22.5 m: ground {on_ground:.4f}, ice (friction 0.1) {on_ice:.4f}")
+    assert on_ice > 1.5 * on_ground
 
 
 def test_terrain_is_built_from_its_config_and_is_flat_at_z0(make_env):

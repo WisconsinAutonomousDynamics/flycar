@@ -65,3 +65,12 @@ obstacles:
     x: [-8.0, 4.0]
     y: [-15.0, 15.0]
     count: 2
+
+# B1: an ice strip between the spawn area and the lamp (see docs/teams/vehicle.md).
+terrain:
+  type: rigid_patches
+  patches:
+    - x: -10.0
+      y: 0.0
+      size_m: [4.0, 36.0]
+      friction: 0.15            # ice
