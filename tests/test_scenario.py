@@ -65,3 +65,27 @@ def test_layout_is_reproducible_and_respects_constraints():
     assert np.hypot(spawn_x - target_x, spawn_y - target_y) >= scenario["spawn"]["min_target_distance_m"]
     assert len(first["obstacles"]) == 4
     assert len(first["walls"]) == 4
+
+def test_obstacle_within_arena(): 
+    """Check if the obstacle is within the arena bounds."""
+    scenario = {"name": "test_obstacle_within_arena", "obstacles": [{"shape": "cylinder", "size_m": [1, 1], "x": -30, "y": -30}]}
+    with pytest.raises(ScenarioError, match="out of bounds of the arena"):
+        load_scenario(scenario)
+
+def test_light_is_valid(): 
+    """Check if the light is intiated with valid values."""
+    scenario = {"name": "test_invalid_light", "lighting": {"ambient": -1}}
+    with pytest.raises(ScenarioError, match="lighting.ambient"):
+        load_scenario(scenario)
+    
+def test_sky_is_valid(): 
+    """Check if the sky is intiated with valid values."""
+    scenario = {"name": "test_invalid_sky", "lighting": {"sky": 2}}
+    with pytest.raises(ScenarioError, match="lighting.sky"):
+        load_scenario(scenario)
+
+def test_lamp_is_valid(): 
+    """Check if the lamp is out of bounds."""
+    scenario = {"name": "test_invalid_lamp", "lights": [{"target": True, "x": -21, "y": -21}]}
+    with pytest.raises(ScenarioError, match="out of bounds of the arena"):
+        load_scenario(scenario)

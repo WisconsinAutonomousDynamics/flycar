@@ -13,8 +13,6 @@ dashboard can draw the arena without importing pychrono. It is returned by
 """
 
 import math
-
-from matplotlib.pylab import where
 import pychrono as chrono
 import pychrono.vehicle as veh
 
@@ -91,21 +89,6 @@ def sample_layout(scenario, rng):
         if light["target"]:
             target = [light["x"], light["y"]]
 
- # ---- Tester for A3 ---------------------------------------------------------
-    def test_lamp_overlaps(): 
-        """Check if the lamp overlaps with an obstacle."""
-        obstacle = {"shape": "box", "size_m": [2.0, 2.0, 1.5], "x": 0, "y": 0, "yaw_deg": 0}
-        lamp = {"x": 0, "y": 0, "target": True}
-        scenario = {"name": "test_lamp_overlaps_obstacle", "obstacles": [obstacle], "lights": [lamp]}
-
-        try: 
-            sample_layout((load_scenario), rng) 
-        except ScenarioError as e: 
-            assert "overlapping lamp and obstacle" in str(e) 
-        else: 
-            assert False, "Test failed: no exception raised for overlapping object locations."
-
-
     # ---- Spawn pose ---------------------------------------------------------
     spawn_spec = scenario["spawn"]
     limit_x = size_x / 2.0 - SPAWN_WALL_MARGIN_M
@@ -133,16 +116,19 @@ def sample_layout(scenario, rng):
     areaUsedUp = 0  #A3: built with the assumption that the cylinders are upright. It is assumed the obstacles do not overlap. 
     count_did_not_fit = 0 
     for obstacle in scenario["obstacles"]: 
-      if len(obstacle["size_m"]) == 3: #The oject is a box occupying a projected area of x*y
-          areaUsedUp = areaUsedUp + obstacle["size_m"][0] * obstacle["size_m"][1]
-      else: #The object is a cylinder occupying a projected area of pi. 
-          areaUsedUp = areaUsedUp + math.pi * (obstacle["size_m"][0]) * (obstacle["size_m"][0]) #pi * r^2 
-      if areaUsedUp > 1600: 
-          count_did_not_fit = count_did_not_fit + 1 
+      for i in range(int(obstacle["count"])): 
+          if len(obstacle["size_m"]) == 3: #The oject is a box occupying a projected area of x*y
+              areaUsedUp = areaUsedUp + obstacle["size_m"][0] * obstacle["size_m"][1]
+              if areaUsedUp > size_x * size_y: 
+                  count_did_not_fit = count_did_not_fit + 1 
+          else: #The object is a cylinder occupying a projected area of pi. 
+              areaUsedUp = areaUsedUp + math.pi * (obstacle["size_m"][0]) * (obstacle["size_m"][0]) #pi * r^2 
+              if areaUsedUp > size_x * size_y: 
+                  count_did_not_fit = count_did_not_fit + 1 
           
     if count_did_not_fit > 0:
       print(f"{count_did_not_fit}") 
-      raise ScenarioError("Too many obstacles")
+      raise ScenarioError(f"Too many obstacles: {count_did_not_fit} obstacles could not fit in the arena. Reduce the number of obstacles or their size.") 
     
     # ---- Obstacles ----------------------------------------------------------
     obstacles = []
@@ -205,25 +191,6 @@ def sample_layout(scenario, rng):
         },
     }
                            
-
-def test_sample_layout(scenario, rng):
-    """Check if there are too many obstacles in the arena."""
-    count = 0 
-    for i in range(-1, 21): 
-      for j in range(-1, 21):
-        obstacles = {
-        "shape": "box",
-        "size_m": [2.0, 2.0, 1.5] ,    # length, width, height
-        "x": [i],
-        "y": [j],
-        "yaw_deg": [0.0, 90.0]
-        }
-        scenario["obstacles"].append(obstacles)
-        count = count + 1 
-    with pytest.raises(ScenarioError, match="Too many obstacles"):
-        load_scenario(scenario)
-
-
 # ----------------------------------------------------------------------------
 # Step 2: build the Chrono bodies for a layout
 # ----------------------------------------------------------------------------

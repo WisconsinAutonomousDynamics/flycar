@@ -191,10 +191,10 @@ def _validate(scenario, where):
         x = obstacle["x"] if isinstance(obstacle["x"], list) else [obstacle["x"]]
         y = obstacle["y"] if isinstance(obstacle["y"], list) else [obstacle["y"]]
         if obstacle["shape"] == "box": 
-            if max(x) > 20 - obstacle["size_m"][0]/2 or min(x) < -20 + obstacle["size_m"][0]/2 or max(y) > 20 - obstacle["size_m"][1]/2 or min(y) < -20 + obstacle["size_m"][1]/2: #since the arena is 40x40 and centered at the origin. 
+            if max(x) > scenario["arena"]["size_m"][0]/2 - obstacle["size_m"][0]/2 or min(x) < -scenario["arena"]["size_m"][0]/2 + obstacle["size_m"][0]/2 or max(y) > scenario["arena"]["size_m"][1]/2 - obstacle["size_m"][1]/2 or min(y) < -scenario["arena"]["size_m"][1]/2 + obstacle["size_m"][1]/2: #since the arena is 40x40 and centered at the origin. 
                 raise ScenarioError(f"{where}: obstacle at ({obstacle['x']}, {obstacle['y']}) is out of bounds of the arena.")
         else: 
-            if max(x) > 20 - obstacle["size_m"][0] or min(x) < -20 + obstacle["size_m"][0] or max(y) > 20 - obstacle["size_m"][0] or min(y) < -20 + obstacle["size_m"][0]: #since the arena is 40x40 and centered at the origin. 
+            if max(x) > scenario["arena"]["size_m"][0]/2 - obstacle["size_m"][0] or min(x) < -scenario["arena"]["size_m"][0]/2 + obstacle["size_m"][0] or max(y) > scenario["arena"]["size_m"][1]/2 - obstacle["size_m"][0] or min(y) < -scenario["arena"]["size_m"][1]/2 + obstacle["size_m"][0]: #since the arena is 40x40 and centered at the origin. 
                 raise ScenarioError(f"{where}: obstacle at ({obstacle['x']}, {obstacle['y']}) is out of bounds of the arena.")
 
     if scenario["lighting"]["ambient"] < 0.0 or scenario["lighting"]["ambient"] > 1.0:
@@ -207,51 +207,8 @@ def _validate(scenario, where):
         if light["target"] == True:
             x = light["x"] if isinstance(light["x"], list) else [light["x"]]
             y = light["y"] if isinstance(light["y"], list) else [light["y"]]
-            if max(x) > 20 or min(x) < -20 or max(y) > 20 or min(y) < -20:
+            if max(x) > scenario["arena"]["size_m"][0]/2 or min(x) < -scenario["arena"]["size_m"][0]/2 or max(y) > scenario["arena"]["size_m"][1]/2 or min(y) < -scenario["arena"]["size_m"][1]/2:
                 raise ScenarioError(f"{where}: target lamp at ({light['x']}, {light['y']}) is out of bounds of the arena.")
-
-import pytest
-from flycar.env.scenario import load_scenario, ScenarioError
-
-def test_obstacle_within_arena(): 
-    """Check if the obstacle is within the arena bounds."""
-    scenario = {"name": "test_obstacle_within_arena", "obstacles": [{"shape": "cylinder", "size_m": [1, 1], "x": -30, "y": -30}]}
-    try: 
-        load_scenario(scenario)
-    except ScenarioError as e: 
-        assert "out of bounds of arena" in str(e) 
-    else: 
-        assert False, "Test failed: no exception raised for obstacle out of bounds."
-
-def test_light_is_valid(): 
-    """Check if the light is intiated with valid values."""
-    scenario = {"name": "test_invalid_light", "lighting": {"ambient": -1}}
-    try: 
-        load_scenario(scenario)
-    except ScenarioError as e: 
-         assert "lighting.ambient" in str(e) 
-    else: 
-         assert False, "Test failed: no exception raised for invalid ambient light parameter."
-
-def test_sky_is_valid(): 
-    """Check if the sky is intiated with valid values."""
-    scenario = {"name": "test_invalid_sky", "lighting": {"sky": 2}}
-    try: 
-        load_scenario(scenario)
-    except ScenarioError as e: 
-        assert "lighting.sky" in str(e) 
-    else: 
-        assert False, "Test failed: no exception raised for invalid sky parameter."
-   
-def test_lamp_is_valid(): 
-    """Check if the lamp is out of bounds."""
-    scenario = {"name": "test_invalid_lamp", "lights": [{"target": True, "lamp": {"x": -21, "y": -21}}]}
-    try: 
-        load_scenario(scenario)
-    except ScenarioError as e: 
-        assert "out of bounds lamp" in str(e) 
-    else: 
-        assert False, "Test failed: no exception raised for invalid lamp location."
 
 def sample(value, rng):
     """Turn a scenario value into a number.
